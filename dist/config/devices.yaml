@@ -1,0 +1,19 @@
+devices:
+- host: 192.168.1.10
+  name: cisco-core
+  password: cisco
+  type: cisco
+  username: admin
+  vdom: ''
+  enable_password: cisco
+- host: 10.0.0.254
+  name: fg-branch
+  password: fortinet
+  type: fortigate
+  username: admin
+  vdom: root
+- host: 172.16.1.10
+  name: pa-01
+  password: paloalto
+  type: paloalto
+  username: admin

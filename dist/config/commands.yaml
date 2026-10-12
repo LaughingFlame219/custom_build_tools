@@ -1,0 +1,21 @@
+cisco:
+  commands:
+  - ter len 0
+  - show version
+  - show ip interface brief
+  - show running-config
+  enable: true
+  vdom_required: false
+fortigate:
+  commands:
+  - get system status
+  - get system interface
+  - diagnose sys top
+  enable: false
+  vdom_required: true
+paloalto:
+  commands:
+  - show system info
+  - show interface all
+  enable: false
+  vdom_required: false
