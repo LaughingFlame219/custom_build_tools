@@ -1,2 +1,0 @@
-log_enabled: true
-log_timestamp: true   # ← ログの中身にタイムスタンプを付ける
