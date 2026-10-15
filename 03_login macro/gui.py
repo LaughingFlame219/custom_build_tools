@@ -47,7 +47,13 @@ def device_editor_gui():
     layout = [
         [sg.Text("機器一覧")],
         [sg.Listbox(names, size=(30, 10), key="device_list")],
-        [sg.Button("追加"), sg.Button("編集"), sg.Button("削除"), sg.Button("設定"), sg.Button("終了")]
+
+        # ★ ログイン方式選択を追加
+        [sg.Text("ログイン方式")],
+        [sg.Radio("CLI（SSH / TeraTerm）", "LOGIN_TYPE", default=True, key="login_cli")],
+        [sg.Radio("GUI（HTTPS / Web）", "LOGIN_TYPE", key="login_gui")],
+
+        [sg.Button("ログイン"), sg.Button("追加"), sg.Button("編集"), sg.Button("削除"), sg.Button("設定"), sg.Button("終了")]
     ]
 
     window = sg.Window("Device Editor", layout)
@@ -57,17 +63,28 @@ def device_editor_gui():
         if event in (sg.WIN_CLOSED, "終了"):
             break
 
+        selected = values["device_list"]
+        if event == "ログイン" and selected:
+            idx = names.index(selected[0])
+            device = devices[idx]
+
+            # ★ CLI / GUI の分岐
+            if values["login_cli"]:
+                from login_executor import try_login_only
+                sg.popup(try_login_only(device))
+
+            elif values["login_gui"]:
+                open_fortigate_gui(device)
+
         if event == "追加":
             open_device_edit_window(None, devices)
 
         if event == "編集":
-            selected = values["device_list"]
             if selected:
                 idx = names.index(selected[0])
                 open_device_edit_window(idx, devices)
 
         if event == "削除":
-            selected = values["device_list"]
             if selected:
                 idx = names.index(selected[0])
                 devices.pop(idx)
