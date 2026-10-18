@@ -1,5 +1,8 @@
 import PySimpleGUI as sg
 from config_editor import load_devices, save_devices, load_settings, save_settings
+from gui_login import open_fortigate_gui
+from gui_login_palo import open_paloalto_gui
+from fortigate_get_config import fortigate_get_config
 
 
 # ---------------------------------------------------------
@@ -48,12 +51,15 @@ def device_editor_gui():
         [sg.Text("機器一覧")],
         [sg.Listbox(names, size=(30, 10), key="device_list")],
 
-        # ★ ログイン方式選択を追加
+        # ★ ログイン方式選択
         [sg.Text("ログイン方式")],
         [sg.Radio("CLI（SSH / TeraTerm）", "LOGIN_TYPE", default=True, key="login_cli")],
         [sg.Radio("GUI（HTTPS / Web）", "LOGIN_TYPE", key="login_gui")],
 
-        [sg.Button("ログイン"), sg.Button("追加"), sg.Button("編集"), sg.Button("削除"), sg.Button("設定"), sg.Button("終了")]
+        # ★ コンフィグ取得ボタン追加
+        [sg.Button("ログイン"), sg.Button("コンフィグ取得"),
+         sg.Button("追加"), sg.Button("編集"), sg.Button("削除"),
+         sg.Button("設定"), sg.Button("終了")]
     ]
 
     window = sg.Window("Device Editor", layout)
@@ -64,26 +70,69 @@ def device_editor_gui():
             break
 
         selected = values["device_list"]
+
+        # ---------------------------------------------------------
+        # ログイン処理
+        # ---------------------------------------------------------
         if event == "ログイン" and selected:
             idx = names.index(selected[0])
             device = devices[idx]
 
-            # ★ CLI / GUI の分岐
             if values["login_cli"]:
                 from login_executor import try_login_only
                 sg.popup(try_login_only(device))
 
             elif values["login_gui"]:
-                open_fortigate_gui(device)
+                if device["type"] == "fortigate":
+                    driver = open_fortigate_gui(device)
+                    sg.popup("[INFO] FortiGate GUIログイン完了" if driver else "[ERROR] GUIログイン失敗")
+                else:
+                    sg.popup("[WARN] GUIログイン非対応の機器です")
 
+        # ---------------------------------------------------------
+        # ★ コンフィグ取得処理（GUIログイン → バックアップ → 保存）
+        # ---------------------------------------------------------
+        if event == "コンフィグ取得" and selected:
+            idx = names.index(selected[0])
+            device = devices[idx]
+
+            if device["type"] == "fortigate":
+                # GUIログイン
+                driver = open_fortigate_gui(device)
+                if not driver:
+                    sg.popup("[ERROR] GUIログインに失敗しました")
+                    continue
+
+                # コンフィグ取得
+                result = fortigate_get_config(driver, device["host"])
+
+                try:
+                    driver.quit()
+                except:
+                    pass
+
+                sg.popup(result)
+
+            else:
+                sg.popup("[WARN] FortiGate 以外は未対応です")
+
+        # ---------------------------------------------------------
+        # デバイス追加
+        # ---------------------------------------------------------
         if event == "追加":
             open_device_edit_window(None, devices)
 
+        # ---------------------------------------------------------
+        # デバイス編集
+        # ---------------------------------------------------------
         if event == "編集":
             if selected:
                 idx = names.index(selected[0])
                 open_device_edit_window(idx, devices)
 
+        # ---------------------------------------------------------
+        # デバイス削除
+        # ---------------------------------------------------------
         if event == "削除":
             if selected:
                 idx = names.index(selected[0])
@@ -92,6 +141,9 @@ def device_editor_gui():
                 names = [d["name"] for d in devices]
                 window["device_list"].update(names)
 
+        # ---------------------------------------------------------
+        # 設定画面
+        # ---------------------------------------------------------
         if event == "設定":
             settings_editor_gui()
 

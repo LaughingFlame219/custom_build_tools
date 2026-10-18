@@ -2,12 +2,44 @@ import subprocess
 from datetime import datetime
 import os
 import yaml
-
 from config_editor import load_settings
 
-TTERM_PRO = r"C:\Program Files (x86)\teraterm5\ttermpro.exe"
-TTERM_MACRO = r"C:\Program Files (x86)\teraterm5\ttpmacro.exe"
+# ---------------------------------------------------------
+# TeraTerm のパス自動検出
+# ---------------------------------------------------------
+def find_teraterm_path():
+    candidates = [
+        r"C:\Program Files (x86)\teraterm5",
+        r"C:\Program Files\teraterm5",
+        r"C:\Program Files (x86)\Tera Term",
+        r"C:\Program Files\Tera Term",
+    ]
 
+    for base in candidates:
+        exe = os.path.join(base, "ttermpro.exe")
+        macro = os.path.join(base, "ttpmacro.exe")
+        if os.path.exists(exe) and os.path.exists(macro):
+            return exe, macro
+
+    # settings.yaml にユーザー指定があれば優先
+    settings = load_settings()
+    exe = settings.get("tterm_pro_path")
+    macro = settings.get("tterm_macro_path")
+    if exe and macro and os.path.exists(exe) and os.path.exists(macro):
+        return exe, macro
+
+    raise FileNotFoundError("TeraTerm の実行ファイルが見つかりません。settings.yaml にパスを指定してください。")
+
+
+# ---------------------------------------------------------
+# パス取得
+# ---------------------------------------------------------
+try:
+    TTERM_PRO, TTERM_MACRO = find_teraterm_path()
+except FileNotFoundError as e:
+    print(f"[ERROR] {e}")
+    TTERM_PRO = ""
+    TTERM_MACRO = ""
 
 # ---------------------------------------------------------
 # ログファイル名生成（name_host_取得日時.log）
