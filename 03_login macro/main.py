@@ -5,7 +5,10 @@ from gui import device_editor_gui
 from command_editor import command_editor_gui
 from parallel_gui_login import run_parallel_gui_login
 from fortigate_get_config import fortigate_get_config
+from paloalto_get_config import paloalto_get_config
 from gui_login import open_fortigate_gui
+from gui_login_palo import open_paloalto_gui
+
 
 # ★ GUIログイン後の driver を保持する辞書
 gui_drivers = {}   # { "device_name": driver }
@@ -131,6 +134,15 @@ def main_gui():
 
                     # ★ コンフィグ取得
                     result = fortigate_get_config(driver, dev["host"])
+                    print(result)
+
+                if dev["type"] == "paloalto":
+                    driver = open_paloalto_gui(dev)   # FortiGate と同じ構造で作る
+                    if not driver:
+                        print("[ERROR] GUIログインに失敗しました")
+                        continue
+
+                    result = paloalto_get_config(driver, dev["host"])
                     print(result)
                 
                     try:
