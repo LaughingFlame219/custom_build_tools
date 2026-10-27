@@ -79,8 +79,9 @@ def device_editor_gui():
             device = devices[idx]
 
             if values["login_cli"]:
-                from login_executor import try_login_only
+                from ssh_core import try_login_only
                 sg.popup(try_login_only(device))
+        
 
             elif values["login_gui"]:
                 if device["type"] == "fortigate":
@@ -175,6 +176,7 @@ def open_device_edit_window(index, devices):
         [sg.Text("Enable Password"), sg.Input(device.get("enable_password", ""), key="enable_password")],
         [sg.Text("種別"), sg.Combo(["cisco", "fortigate", "paloalto"], default_value=device["type"], key="type")],
         [sg.Text("VDOM (FortiGate)"), sg.Input(device.get("vdom", ""), key="vdom")],
+        [sg.Text("プロトコル"), sg.Combo(["https", "http"], default_value=device.get("protocol", "https"), key="protocol")],
         [sg.Button("保存"), sg.Button("キャンセル")]
     ]
 
@@ -193,7 +195,8 @@ def open_device_edit_window(index, devices):
                 "password": values["password"],
                 "enable_password": values["enable_password"],
                 "type": values["type"],
-                "vdom": values["vdom"]
+                "vdom": values["vdom"],
+                "protocol": values["protocol"]
             }
 
             if index is None:

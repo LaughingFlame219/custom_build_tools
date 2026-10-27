@@ -24,8 +24,8 @@ def main_gui():
         [sg.Text("機器一覧")],
         [sg.Listbox(names, size=(30, 10), key="target_devices", select_mode="extended")],
         [sg.Text("ログイン方式")],
-        [sg.Radio("CLI（SSH / TeraTerm）", "LOGIN_TYPE", default=True, key="login_cli")],
-        [sg.Radio("GUI（HTTPS / Web）", "LOGIN_TYPE", key="login_gui")],
+        [sg.Radio("CLI（SSH）", "LOGIN_TYPE", default=True, key="login_cli")],
+        [sg.Radio("GUI（HTTPS / HTTP）", "LOGIN_TYPE", key="login_gui")],
 
         [
             sg.Button("ログイン"),
@@ -124,25 +124,27 @@ def main_gui():
         
             for dev in targets:
                 print(f"\n===== {dev['name']} =====")
-        
+
+                protocol = dev.get("protocol", "https")
+    
                 if dev["type"] == "fortigate":
                     # ★ コンフィグ取得用に、その場で GUIログイン
-                    driver = open_fortigate_gui(dev)
+                    driver = open_fortigate_gui(dev,protocol)
                     if not driver:
                         print("[ERROR] GUIログインに失敗しました")
                         continue
 
                     # ★ コンフィグ取得
-                    result = fortigate_get_config(driver, dev["host"])
+                    result = fortigate_get_config(driver, dev["host"],protocol)
                     print(result)
 
-                if dev["type"] == "paloalto":
-                    driver = open_paloalto_gui(dev)   # FortiGate と同じ構造で作る
+                elif dev["type"] == "paloalto":
+                    driver = open_paloalto_gui(dev,protocol)   # FortiGate と同じ構造で作る
                     if not driver:
                         print("[ERROR] GUIログインに失敗しました")
                         continue
 
-                    result = paloalto_get_config(driver, dev["host"])
+                    result = paloalto_get_config(driver, dev["host"],protocol)
                     print(result)
                 
                     try:

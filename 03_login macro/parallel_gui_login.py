@@ -6,15 +6,16 @@ MAX_GUI_WORKERS = 3
 
 def gui_login_worker(device):
     dev_type = device["type"]
+    protocol = device.get("protocol", "https") 
 
     if dev_type == "fortigate":
-        return device["name"], (device["name"], open_fortigate_gui(device))
+         return device["name"], open_fortigate_gui(device, protocol)
 
     elif dev_type == "paloalto":
-        return device["name"], (device["name"], open_paloalto_gui(device))
+        return device["name"], open_paloalto_gui(device, protocol)
 
     else:
-        return device["name"], (device["name"], None)
+         return device["name"], None
 
 
 def run_parallel_gui_login(devices):

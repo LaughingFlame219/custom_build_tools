@@ -1,10 +1,12 @@
 import winreg
 import time
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
+from selenium.common.exceptions import TimeoutException
 
 # ---------------------------------------------------------
 # Windows の既定ブラウザを取得
@@ -33,11 +35,17 @@ def get_default_browser():
 # ---------------------------------------------------------
 def bypass_certificate_warning(driver):
     try:
+        WebDriverWait(driver,3).until(
+            EC.presence_of_element_located((By.ID,"detail-button"))
+        )
+
         driver.find_element(By.ID, "details-button").click()
         time.sleep(1)
         driver.find_element(By.ID, "proceed-link").click()
         time.sleep(3)
+
         print("[INFO] 証明書警告をスキップ")
+
     except:
         pass
 
@@ -62,14 +70,14 @@ def get_visible_element(driver, xpaths):
 
 
 # ---------------------------------------------------------
-# Palo Alto GUI 自動ログイン（★ driver を返す版）
+# Palo Alto GUI Login
 # ---------------------------------------------------------
 def open_paloalto_gui(device):
 
     host = device["host"].strip()
     user = device["username"].strip()
     password = device["password"].strip()
-    url = f"https://{host}/"
+    url = f"{protocol}://{host}/"
 
     driver = None
 
@@ -78,87 +86,167 @@ def open_paloalto_gui(device):
 
         # ブラウザ起動
         if "Chrome" in prog_id:
+
             options = webdriver.ChromeOptions()
+
             options.add_argument("--ignore-certificate-errors")
             options.add_argument("--allow-insecure-localhost")
+            options.add_argument("--disable-web-security")
+
             driver = webdriver.Chrome(options=options)
 
         elif "Firefox" in prog_id:
+
             options = webdriver.FirefoxOptions()
-            options.set_preference("security.enterprise_roots.enabled", True)
+            options.set_preference(
+                "security.enterprise_roots.enabled", 
+                True
+            )
+
             driver = webdriver.Firefox(options=options)
 
         else:
             options = webdriver.EdgeOptions()
+
             options.add_argument("--ignore-certificate-errors")
             options.add_argument("--allow-insecure-localhost")
+            options.add_argument("--disable-web-security")
+
+            options.add_argument("--disable-gpu")
+            options.add_argument("--no-sandbox")
+
             driver = webdriver.Edge(options=options)
 
-        driver.maximize_window()
-        driver.set_page_load_timeout(30)
+            driver.set_page_load_timeout(15)
 
-        print(f"[INFO] Accessing {url}")
-        driver.get(url)
-        time.sleep(3)
+
+        try:
+            driver.get(url)
+            time.sleep(3)
+        except Exception as e:
+            print("GET ERROR:",e)
+            print("CURRENT URL:",driver.current_url)
 
         bypass_certificate_warning(driver)
 
-        wait = WebDriverWait(driver, 10)
-        wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
 
         print(f"[INFO] TITLE = {driver.title}")
         print(f"[INFO] URL = {driver.current_url}")
 
         # ユーザー名
         username_field = get_visible_element(driver, [
+
             "//input[@id='user']",
             "//input[@name='user']",
             "//input[@name='username']",
+            "//input[@autocomplete='username']",
+            "//input[@contains(@aria-label,'User')]",
+            "//input[@contains(@aplaceholder,'User')]",
             "//input[@type='text']",
         ])
+
         if username_field is None:
+
             raise Exception("username field not found")
 
-        # パスワード
+        # password
         password_field = get_visible_element(driver, [
+
             "//input[@id='password']",
             "//input[@name='password']",
+            "//input[@autocomplete='current-password')]",
+            "//input[@contains(@aria-label,'Password')]",
             "//input[@type='password']",
         ])
+        
         if password_field is None:
             raise Exception("password field not found")
 
         # 入力
-        username_field.click()
         username_field.clear()
         username_field.send_keys(user)
 
-        password_field.click()
         password_field.clear()
         password_field.send_keys(password)
 
         print("[INFO] Credentials entered")
 
-        # ログインボタン
+        # Login Buttons
+
         login_button = get_visible_element(driver, [
+            "//button[@type='submit']",
             "//input[@type='submit']",
-            "//button",
+
+            "//button[contains(.,'Log In')]",
+            "//button[contains(.,'Login')]",
+            "//button[contains(.,'Sign In')]",
+
             "//*[contains(text(),'Log In')]",
-            "//*[contains(text(),'Login')]"
+            "//*[contains(text(),'Login')]",
+            "//*[contains(text(),'Sign In')]",
         ])
+
         if login_button is None:
-            driver.save_screenshot(f"{host}_button_error.png")
-            raise Exception("login button not found")
 
-        login_button.click()
-        print("[SUCCESS] Login button clicked")
+            print("[WARN] Login button not found.")
+            print("[INFO] Try Enter Key.")
 
-        # ★ 成功 → driver を返す
+            password_field.send_keys(Keys.ENTER)
+
+        else:
+
+            login_button.click()
+            
+        print("[INFO] Login Submitted")
+
+        # ---------------------------------------------------------
+        # popup close
+        # ---------------------------------------------------------
+        def close_telemetry_popup(driver):
+
+            try:
+
+                time.sleep(2)
+
+                close_button = driver.find_element(
+                    By.XPATH,
+                    "//*[text()='閉じる']"
+                )
+
+                driver.execute_script(
+                    "arguments[0].click()",
+                    close_button
+                )
+
+            except Exception as e:
+                print(f"[ERROR] ポップアップなし: {e}")
+
+        # ----------------------------
+        # ログイン成功判定
+        # ----------------------------
+        try:
+            WebDriverWait(driver,30).until(
+                lambda d:(
+                    "login" not in d.current_url.lower()
+                    and "signin" not in d.current_url.lower()
+                )
+            )
+        except TimeoutException:
+            raise Exception(
+                f"login timeout. current url = {driver.current_url}"
+            )
+        time.sleep(3)
+        print(f"[SUCESS] Login Success")
+        print(f"[SUCESS] TITLE = {driver.title}")
+        print(f"[SUCESS] URL = {driver.current_url}")
+        close_telemetry_popup(driver)
         return driver
 
     except Exception as e:
-        print(f"[ERROR] GUIログイン中に例外発生: {e}")
-
+        
         try:
             if driver:
                 driver.save_screenshot(f"{host}_login_error.png")

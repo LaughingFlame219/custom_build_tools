@@ -20,11 +20,13 @@ def get_default_browser():
     return "MSEdgeHTM"
 
 
-def open_fortigate_gui(device):
+def open_fortigate_gui(device, protocol="https"):
     host = device["host"].strip()
     user = device["username"].strip()
     password = device["password"].strip()
-    url = f"https://{host}/login"
+
+    # ★ 修正：protocol を使って URL を生成
+    url = f"{protocol}://{host}/login"
 
     prog_id = get_default_browser()
     driver = None
@@ -47,6 +49,11 @@ def open_fortigate_gui(device):
             options = webdriver.EdgeOptions()
             options.add_argument("--ignore-certificate-errors")
             options.add_argument("--allow-insecure-localhost")
+            options.add_argument("--disable-gpu")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-features=IsolateOrigins,site-per-process")
+            options.add_argument("--disable-blink-features=AutomationControlled")
             driver = webdriver.Edge(options=options)
 
         driver.set_page_load_timeout(10)
@@ -76,14 +83,13 @@ def open_fortigate_gui(device):
         pass_field.send_keys(password)
 
         # ---------------------------------------------------------
-        # ★ ログインボタンを直接クリック（class名で取得）
+        # ★ ログインボタンを直接クリック
         # ---------------------------------------------------------
         login_button = driver.find_element(By.CSS_SELECTOR, "button.primary.login-button")
         login_button.click()
 
-        # ログイン後の画面ロード待ち
         time.sleep(3)
-        print("[INFO] FortiGate GUIログイン成功")
+        print(f"[INFO] FortiGate GUIログイン成功 ({protocol.upper()})")
         return driver
 
     except Exception as e:

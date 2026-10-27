@@ -2,7 +2,7 @@ import time
 import os
 from selenium.webdriver.common.by import By
 
-def fortigate_get_config(driver, host):
+def fortigate_get_config(driver, host, protocol):
     """
     FortiGate v7.6.6 GUIから設定バックアップをダウンロードする。
     Shadow DOM対応版（OKボタン強制クリック）。
@@ -10,9 +10,9 @@ def fortigate_get_config(driver, host):
 
     try:
         # ---------------------------------------------------------
-        # ① バックアップ画面へ移動（global設定のみ）
+        # ① バックアップ画面へ移動（protocol に対応）
         # ---------------------------------------------------------
-        url = f"https://{host}/ng/system/config/backup"
+        url = f"{protocol}://{host}/ng/system/config/backup"
         driver.get(url)
         time.sleep(3)
 
@@ -34,7 +34,7 @@ def fortigate_get_config(driver, host):
             pass
 
         # ---------------------------------------------------------
-        # ③ Shadow DOM 内の OK ボタンを強制クリック（最強版）
+        # ③ Shadow DOM 内の OK ボタンを強制クリック
         # ---------------------------------------------------------
         driver.execute_script("""
             const all = document.querySelectorAll('*');
