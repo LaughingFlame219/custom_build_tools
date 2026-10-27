@@ -4,7 +4,7 @@ from selenium.webdriver.common.by import By
 def paloalto_get_config(driver, host):
     try:
         # Device → Setup → Operations ページへ遷移
-        driver.get(f"https://{host}/php/utils/opcmd.php")
+        driver.get(f"https://{host}/?#device::vsys1::device/setup")
         time.sleep(3)
 
         # Export Configuration ボタンを探す
