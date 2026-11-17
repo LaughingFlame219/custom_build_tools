@@ -1,0 +1,16 @@
+connect '192.168.1.99:22 /ssh /auth=password /user=admin /passwd=P@ssw0rd1234'
+logopen "C:\\Users\\msloo\\Desktop\\10_WORK\\001_Network\\006_tools\\05_login macro_cloude code\\logs\\fortigate_192.168.1.99_20261118-083734.log" 0 1 0 1
+wait '#'
+sendln 'config system console'
+wait '#'
+sendln 'set output standard'
+wait '#'
+sendln 'end'
+wait '#'
+sendln 'get system status'
+wait '#'
+sendln 'get system interface'
+wait '#'
+logclose
+sendln 'exit'
+end

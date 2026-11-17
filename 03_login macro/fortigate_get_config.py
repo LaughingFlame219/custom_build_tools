@@ -1,82 +1,64 @@
-import time
-import os
+"""FortiGate: GUIログイン済みブラウザでバックアップURLを開いて取得する。
+
+画面のボタン操作（Shadow DOM 等）に依存せず、ログイン済みセッションの
+Cookie でバックアップ API(GET) を開く。APIトークンは不要。
+
+動作確認: ログイン後の同じブラウザで下記URLを開き、ファイルが
+ダウンロードされれば本処理も動作する。
+  {protocol}://{host}/api/v2/monitor/system/config/backup?scope=global
+
+タブが閉じられた場合は [STOPPED] を返して即中止する。
+"""
+from urllib.parse import urlencode
+
 from selenium.webdriver.common.by import By
 
-def fortigate_get_config(driver, host, protocol):
-    """
-    FortiGate v7.6.6 GUIから設定バックアップをダウンロードする。
-    Shadow DOM対応版（OKボタン強制クリック）。
-    """
+from gui_login import (
+    DOWNLOAD_TIMEOUT, DownloadError, abort_message, dismiss_fortigate_prompts,
+    get_timeout, prepare_download, quick_get, save_debug, save_download,
+)
+
+
+def fortigate_get_config(driver, device, protocol="https"):
+    name = device["name"]
+    host = device["host"].strip()
+
+    # 既定は global（全体）。VDOM 単位で取りたい場合は devices.yaml に
+    #   backup_scope: vdom  と  vdom: <名前>  を指定
+    params = {"scope": "global"}
+    if device.get("backup_scope") == "vdom" and device.get("vdom"):
+        params = {"scope": "vdom", "vdom": device["vdom"]}
+
+    url = f"{protocol}://{host}/api/v2/monitor/system/config/backup?{urlencode(params)}"
 
     try:
-        # ---------------------------------------------------------
-        # ① バックアップ画面へ移動（protocol に対応）
-        # ---------------------------------------------------------
-        url = f"{protocol}://{host}/ng/system/config/backup"
-        driver.get(url)
-        time.sleep(3)
+        if "/prompt/" in driver.current_url:          # 案内画面が出ていれば先に閉じる
+            dismiss_fortigate_prompts(driver, protocol, host)
+        prepare_download(driver)
+        quick_get(driver, url)
 
-        # ---------------------------------------------------------
-        # ② Local PC / FortiOS 選択（必要ならクリック）
-        # ---------------------------------------------------------
+        path = save_download(driver, device, "fortigate",
+                             timeout=get_timeout("download_timeout", DOWNLOAD_TIMEOUT),
+                             default_ext=".conf")
+        if path:
+            return f"[SUCCESS] {name}: コンフィグ取得完了 → {path}"
+
+        hint = ""
         try:
-            local_btn = driver.find_element(By.XPATH, "//button[contains(text(),'Local PC')]")
-            driver.execute_script("arguments[0].click();", local_btn)
-            print("[INFO] Local PC を選択しました")
-        except:
+            hint = driver.find_element(By.TAG_NAME, "body").text.strip()[:200]
+        except Exception:
             pass
-
-        try:
-            fortios_btn = driver.find_element(By.XPATH, "//button[contains(text(),'FortiOS')]")
-            driver.execute_script("arguments[0].click();", fortios_btn)
-            print("[INFO] FortiOS フォーマットを選択しました")
-        except:
-            pass
-
-        # ---------------------------------------------------------
-        # ③ Shadow DOM 内の OK ボタンを強制クリック
-        # ---------------------------------------------------------
-        driver.execute_script("""
-            const all = document.querySelectorAll('*');
-            for (const el of all) {
-                const t = (el.innerText || '').trim();
-                if (t === 'OK') {
-                    el.click();
-                    return;
-                }
-            }
-        """)
-        print("[INFO] 強制的に OK ボタンをクリックしました")
-
-        # ---------------------------------------------------------
-        # ④ ダウンロード完了を待つ
-        # ---------------------------------------------------------
-        download_dir = os.path.expanduser("~/Downloads")
-        time.sleep(5)
-
-        files = os.listdir(download_dir)
-        files = [f for f in files if f.endswith(".conf") or f.endswith(".cfg")]
-
-        if not files:
-            return "[ERROR] ダウンロードされたコンフィグファイルが見つかりません"
-
-        latest = max(
-            [os.path.join(download_dir, f) for f in files],
-            key=os.path.getctime
-        )
-
-        # ---------------------------------------------------------
-        # ⑤ 保存先へコピー
-        # ---------------------------------------------------------
-        save_name = f"fortigate_config_{host}.conf"
-        os.makedirs("configs", exist_ok=True)
-        save_path = os.path.join("configs", save_name)
-
-        with open(latest, "r", encoding="utf-8", errors="ignore") as src:
-            with open(save_path, "w", encoding="utf-8") as dst:
-                dst.write(src.read())
-
-        return f"[SUCCESS] GUIバックアップ取得完了 → {save_path}"
+        save_debug(driver, f"{name}_backup")
+        return f"[ERROR] {name}: ダウンロードされませんでした {hint}"
 
     except Exception as e:
-        return f"[ERROR] GUIバックアップ取得中に例外発生: {e}"
+        stop = abort_message(driver, name, e)
+        if stop:
+            return stop
+        save_debug(driver, f"{name}_backup")
+        if isinstance(e, DownloadError):
+            hint = ""
+            if "401" in str(e) or "403" in str(e):
+                hint = "（ログイン済みセッションではバックアップAPIが使えない可能性。同URLを手動で開いて確認）"
+            return f"[ERROR] {name}: {e}{hint}"
+        return f"[ERROR] {name}: コンフィグ取得中に例外: {(str(e).splitlines() or [repr(e)])[0]}"
