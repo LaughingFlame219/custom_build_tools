@@ -1,0 +1,31 @@
+<config version="10.2.0"><devices><entry name="localhost.localdomain"><vsys><entry name="vsys1">
+<address>
+  <entry name="NET-A"><ip-netmask>192.168.1.0/24</ip-netmask></entry>
+  <entry name="SRV-1"><ip-netmask>10.0.0.1</ip-netmask></entry>
+  <entry name="RNG"><ip-range>10.0.1.10-10.0.1.20</ip-range></entry>
+  <entry name="WWW"><fqdn>www.example.com</fqdn></entry>
+</address>
+<address-group><entry name="G1"><static><member>NET-A</member><member>SRV-1</member></static></entry></address-group>
+<service><entry name="tcp-8443"><protocol><tcp><port>8443,9000-9002</port></tcp></protocol></entry></service>
+<rulebase><security><rules>
+  <entry name="Deny-SRV1"><from><member>trust</member></from><to><member>untrust</member></to>
+    <source><member>SRV-1</member></source><destination><member>RNG</member></destination>
+    <application><member>any</member></application><service><member>any</member></service><action>drop</action></entry>
+  <entry name="Allow-Web"><from><member>trust</member></from><to><member>untrust</member></to>
+    <source><member>G1</member></source><destination><member>RNG</member></destination>
+    <application><member>web-browsing</member><member>ssl</member></application>
+    <service><member>application-default</member></service><action>allow</action>
+    <profile-setting><group><member>default</member></group></profile-setting></entry>
+  <entry name="Allow-8443"><from><member>trust</member></from><to><member>dmz</member></to>
+    <source><member>NET-A</member></source><destination><member>SRV-1</member></destination>
+    <application><member>ssl</member></application>
+    <service><member>tcp-8443</member></service><action>allow</action></entry>
+  <entry name="Reset-telnet"><from><member>any</member></from><to><member>any</member></to>
+    <source><member>any</member></source><destination><member>RNG</member></destination>
+    <application><member>telnet</member></application>
+    <service><member>application-default</member></service><action>reset-client</action></entry>
+  <entry name="Old-rule"><disabled>yes</disabled><from><member>trust</member></from><to><member>untrust</member></to>
+    <source><member>any</member></source><destination><member>any</member></destination>
+    <application><member>any</member></application><service><member>any</member></service><action>allow</action></entry>
+</rules></security></rulebase>
+</entry></vsys></entry></devices></config>
