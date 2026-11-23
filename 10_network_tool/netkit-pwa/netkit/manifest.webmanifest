@@ -1,0 +1,30 @@
+{
+  "name": "NetKit 現場ツール",
+  "short_name": "NetKit",
+  "description": "サブネット計算・ワイルドカード変換・ポート検索・MACベンダー検索（オフライン対応）",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d1215",
+  "theme_color": "#0d1215",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

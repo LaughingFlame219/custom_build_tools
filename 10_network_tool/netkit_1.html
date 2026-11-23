@@ -1,0 +1,2422 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NetKit 現場ツール</title>
+<meta name="description" content="サブネット計算・ワイルドカード変換・ポート検索・MACベンダー検索をまとめたオフライン対応ツール">
+<meta name="theme-color" content="#0d1215">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NetKit">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%228%22%20fill%3D%22%230d1215%22/%3E%3Cpath%20d%3D%22M16%2010v5.5M16%2015.5l-7%206M16%2015.5l7%206%22%20stroke%3D%22%233ddc97%22%20stroke-width%3D%222.2%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22/%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%228.5%22%20r%3D%223.2%22%20fill%3D%22%233ddc97%22/%3E%3Ccircle%20cx%3D%229%22%20cy%3D%2223%22%20r%3D%223.2%22%20fill%3D%22%2362a8ff%22/%3E%3Ccircle%20cx%3D%2223%22%20cy%3D%2223%22%20r%3D%223.2%22%20fill%3D%22%2362a8ff%22/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0d1215; --bg2:#121a1e; --panel:#151e23; --panel2:#1b262c; --line:#26343b; --line2:#33454e;
+  --tx:#e3ebee; --tx2:#9fb1b8; --tx3:#6f838b;
+  --acc:#3ddc97; --acc-d:#1f7a55; --acc-bg:rgba(61,220,151,.12);
+  --host:#62a8ff; --host-bg:rgba(98,168,255,.12);
+  --warn:#ffb547; --warn-bg:rgba(255,181,71,.12);
+  --bad:#ff6b6b; --bad-bg:rgba(255,107,107,.12);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Cascadia Mono","Noto Sans Mono","Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo","Noto Sans JP",sans-serif;
+  --r:12px; --nav-h:64px;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#f3f5f4; --bg2:#eaeeec; --panel:#ffffff; --panel2:#f5f8f7; --line:#dbe2e0; --line2:#c7d1ce;
+  --tx:#14201c; --tx2:#4c5d58; --tx3:#7b8a86;
+  --acc:#0f9d63; --acc-d:#0b7a4c; --acc-bg:rgba(15,157,99,.10);
+  --host:#1f6fd1; --host-bg:rgba(31,111,209,.09);
+  --warn:#b26a00; --warn-bg:rgba(230,150,20,.13);
+  --bad:#c93434; --bad-bg:rgba(201,52,52,.09);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--acc)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---------- layout ---------- */
+.app{display:flex;min-height:100%}
+.side{display:none}
+.main{flex:1;min-width:0;padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px)}
+.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;padding:10px 16px;padding-top:calc(10px + env(safe-area-inset-top));background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:.02em}
+.brand svg{flex:none}
+.brand small{font-weight:500;color:var(--tx3);font-size:12px}
+.topbar .sp{flex:1}
+.pill{text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line2);color:var(--tx2);background:var(--panel);white-space:nowrap;cursor:pointer}
+.pill i{width:7px;height:7px;border-radius:50%;background:var(--tx3)}
+.pill.ok i{background:var(--acc);box-shadow:0 0 0 3px var(--acc-bg)}
+.pill.warn i{background:var(--warn)}
+.iconbtn{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;border:1px solid var(--line2);background:var(--panel);cursor:pointer}
+.view{display:none;max-width:980px;margin:0 auto;padding:16px}
+.view.on{display:block}
+h2.vt{font-size:20px;margin:4px 0 2px}
+p.vd{margin:0 0 14px;color:var(--tx2);font-size:13px}
+
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(5,1fr);height:calc(var(--nav-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line)}
+.bnav a,.side a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;text-decoration:none;color:var(--tx3);font-size:11px;font-weight:600}
+.bnav a.on,.side a.on{color:var(--acc)}
+.bnav svg,.side svg{width:22px;height:22px}
+
+@media (min-width:900px){
+  .side{display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh;width:210px;flex:none;padding:16px 12px;border-right:1px solid var(--line);background:var(--bg2)}
+  .side .brand{padding:6px 10px 18px}
+  .side a{flex-direction:row;justify-content:flex-start;gap:12px;padding:10px 12px;border-radius:10px;font-size:14px;color:var(--tx2)}
+  .side a:hover{background:var(--panel)}
+  .side a.on{background:var(--acc-bg);color:var(--acc)}
+  .side .foot{margin-top:auto;padding:10px;font-size:11px;color:var(--tx3)}
+  .bnav{display:none}
+  .topbar .brand{display:none}
+  .main{padding-bottom:24px}
+  .view{padding:22px 28px}
+}
+
+/* ---------- components ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:14px}
+.card h3{margin:0 0 10px;font-size:14px;color:var(--tx2);font-weight:700;display:flex;align-items:center;gap:8px}
+.card h3 .tag{font-weight:600}
+.grid2{display:grid;gap:14px}
+@media (min-width:760px){.grid2{grid-template-columns:1fr 1fr}.grid2>.card{margin-bottom:0}.grid2{margin-bottom:14px}}
+label.f{display:block;font-size:12px;color:var(--tx2);font-weight:600;margin:0 0 5px}
+.inp{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:10px;padding:11px 12px;font-family:var(--mono);font-size:17px;outline:none;transition:border-color .15s,box-shadow .15s}
+.inp:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-bg)}
+.inp.err{border-color:var(--bad);box-shadow:0 0 0 3px var(--bad-bg)}
+textarea.inp{font-size:14px;min-height:96px;resize:vertical;line-height:1.45}
+select.inp{font-size:15px;padding:9px 10px;font-family:var(--sans)}
+.row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.row>*{flex:1;min-width:0}
+.row>.nf{flex:none}
+.hint{font-size:12px;color:var(--tx3);margin-top:6px}
+.msg{font-size:13px;padding:8px 10px;border-radius:9px;margin-top:10px}
+.msg.err{background:var(--bad-bg);color:var(--bad)}
+.msg.warn{background:var(--warn-bg);color:var(--warn)}
+.msg.ok{background:var(--acc-bg);color:var(--acc)}
+.msg.info{background:var(--host-bg);color:var(--host)}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line2);background:var(--panel2);border-radius:10px;padding:9px 14px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--acc)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#05120c}
+:root[data-theme="light"] .btn.pri{color:#fff}
+.btn.sm{padding:5px 10px;font-size:12px;border-radius:8px}
+.btn:disabled{opacity:.45;cursor:default}
+
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--line2);border-radius:10px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:none;padding:6px 11px;border-radius:7px;font-size:13px;font-weight:600;color:var(--tx2);cursor:pointer}
+.seg button.on{background:var(--panel2);color:var(--acc);box-shadow:0 1px 0 var(--line2)}
+
+input[type=range]{width:100%;accent-color:var(--acc);height:28px}
+.pfx{display:flex;align-items:center;gap:10px;margin-top:10px}
+.pfx b{font-family:var(--mono);font-size:18px;min-width:44px;color:var(--acc)}
+
+/* result list */
+.kv{display:grid;grid-template-columns:minmax(110px,max-content) 1fr;border-top:1px solid var(--line)}
+.kv>div{padding:8px 4px;border-bottom:1px solid var(--line);min-width:0}
+.kv .k{color:var(--tx2);font-size:13px;padding-right:12px;display:flex;align-items:center}
+.kv .v{font-family:var(--mono);font-size:15.5px;overflow-wrap:anywhere;cursor:pointer;padding-left:8px;position:relative}
+.kv .k.wide{grid-column:1/-1;border-bottom:0;padding-bottom:0}
+.kv .v.wide{grid-column:1/-1;padding-left:4px;padding-top:2px;font-size:14px;white-space:nowrap;overflow-x:auto}
+.kv .v:hover{background:var(--panel2)}
+.kv .v.big{font-size:18px;font-weight:700}
+.kv .v.acc{color:var(--acc)}
+.kv .v small{font-family:var(--sans);color:var(--tx3);font-size:12px;margin-left:6px}
+.kv .v.plain{cursor:default;font-family:var(--sans);font-size:14px}
+.kv .v.plain:hover{background:none}
+.copyable{cursor:pointer}
+
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--panel2);border:1px solid var(--line2);color:var(--tx2);font-family:var(--sans);vertical-align:middle;white-space:nowrap}
+.badge.acc{background:var(--acc-bg);border-color:transparent;color:var(--acc)}
+.badge.host{background:var(--host-bg);border-color:transparent;color:var(--host)}
+.badge.warn{background:var(--warn-bg);border-color:transparent;color:var(--warn)}
+.badge.bad{background:var(--bad-bg);border-color:transparent;color:var(--bad)}
+
+/* binary */
+.bin{font-family:var(--mono);font-size:13px;line-height:1.9;overflow-x:auto;white-space:nowrap}
+.bin .lbl{display:inline-block;width:86px;color:var(--tx3);font-family:var(--sans);font-size:12px}
+.bin .n{color:var(--acc)}
+.bin .h{color:var(--host)}
+.bin .d{color:var(--tx3);padding:0 1px}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--tx2);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+/* tables */
+.tbl-wrap{overflow:auto;max-height:440px;border:1px solid var(--line);border-radius:10px}
+table.t{width:100%;border-collapse:collapse;font-size:13.5px}
+table.t th{position:sticky;top:0;background:var(--panel2);text-align:left;font-size:12px;color:var(--tx2);padding:8px 10px;border-bottom:1px solid var(--line2);white-space:nowrap}
+table.t td{padding:7px 10px;border-bottom:1px solid var(--line);font-family:var(--mono);white-space:nowrap}
+table.t td.s{font-family:var(--sans)}
+table.t tr:hover td{background:var(--panel2)}
+table.t tr.hl td{background:var(--acc-bg)}
+
+pre.code{margin:0;background:var(--bg);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;font-family:var(--mono);font-size:13.5px;overflow-x:auto;white-space:pre;line-height:1.6;cursor:pointer}
+
+/* ports */
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.chip{border:1px solid var(--line2);background:var(--panel);border-radius:999px;padding:4px 11px;font-size:12.5px;font-weight:600;color:var(--tx2);cursor:pointer}
+.chip.on{background:var(--acc-bg);border-color:var(--acc);color:var(--acc)}
+.plist{display:flex;flex-direction:column;gap:6px}
+.pi{display:grid;grid-template-columns:76px 1fr;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+.pi .num{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--acc);text-align:right}
+.pi.ip .num{color:var(--host)}
+.pi .nm{font-weight:700;font-size:14.5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.pi .ds{font-size:13px;color:var(--tx2)}
+.count{font-size:12px;color:var(--tx3);margin:8px 2px}
+
+/* mac */
+.macgrid{display:grid;gap:8px}
+.vend{font-size:20px;font-weight:700;margin:2px 0 4px}
+.vend.none{color:var(--tx3);font-weight:600;font-size:16px}
+
+.toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 14px);transform:translateX(-50%) translateY(20px);background:var(--tx);color:var(--bg);padding:8px 16px;border-radius:999px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;transition:all .2s;z-index:50;max-width:90vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (min-width:900px){.toast{bottom:24px}}
+
+details.ref summary{cursor:pointer;font-weight:700;font-size:14px;color:var(--tx2);padding:2px 0;list-style:none}
+details.ref summary::before{content:"▸ ";color:var(--tx3)}
+details.ref[open] summary::before{content:"▾ "}
+details.ref summary::-webkit-details-marker{display:none}
+.steps{margin:6px 0 0;padding-left:20px;font-size:13.5px;color:var(--tx2)}
+.steps li{margin:3px 0}
+.dropzone{border:1.5px dashed var(--line2);border-radius:10px;padding:16px;text-align:center;color:var(--tx2);font-size:13px}
+.dropzone.drag{border-color:var(--acc);background:var(--acc-bg)}
+.links{display:flex;flex-direction:column;gap:4px;font-size:13px;margin-top:8px}
+.links code{font-family:var(--mono);font-size:12px;color:var(--tx2);word-break:break-all}
+.hide{display:none!important}
+
+/* mobile overrides (keep last) */
+@media (max-width:600px){.kv{grid-template-columns:minmax(100px,35%) 1fr}.kv .k{font-size:12.5px;padding-right:6px}.kv .v{font-size:14.5px}.kv .v.big{font-size:17px}.kv .v.wide{font-size:13px}.bin .lbl{display:block;width:auto;line-height:1.4;margin-top:4px}.bin{line-height:1.5}}
+@media (max-width:600px){.chips{flex-wrap:nowrap;overflow-x:auto;margin-left:-14px;margin-right:-14px;padding:0 14px 4px;scrollbar-width:none}.chips::-webkit-scrollbar{display:none}.chip{flex:none}}
+/* MTU */
+.layers{display:flex;flex-direction:column;gap:6px}
+.layer{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg);border:1px solid var(--line2);border-radius:10px;padding:8px 10px}
+.layer .ln{font-weight:700;font-size:14px}
+.layer .lb{font-family:var(--mono);font-size:13px;color:var(--host)}
+.layer .sp{flex:1}
+.layer select,.layer input{background:var(--panel);border:1px solid var(--line2);border-radius:8px;padding:4px 6px;font-size:13px}
+.layer input{width:70px;font-family:var(--mono)}
+.layer .opts{display:flex;gap:6px;flex-wrap:wrap;width:100%}
+.layer .opts label{font-size:12.5px;display:flex;align-items:center;gap:4px;color:var(--tx2)}
+.layer.empty{color:var(--tx3);font-size:13px;justify-content:center;border-style:dashed}
+.xbtn{border:1px solid var(--line2);background:var(--panel);border-radius:7px;width:28px;height:28px;cursor:pointer;color:var(--tx2);font-size:13px;line-height:1}
+.stack{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+.seg2{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:5px 8px;border-radius:6px;font-size:11.5px;font-weight:600;background:var(--host-bg);color:var(--host);min-width:44px;text-align:center;line-height:1.25}
+.seg2 b{font-family:var(--mono);font-size:12.5px}
+.seg2.l2{background:var(--panel2);color:var(--tx3)}
+.seg2.pay{background:var(--acc-bg);color:var(--acc);flex:1 1 140px}
+.seg2.tail{background:var(--warn-bg);color:var(--warn)}
+/* commands */
+.cmcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:10px}
+.cmcard .ct{font-weight:700;font-size:15px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cmcard .cn{font-size:12.5px;color:var(--tx2);margin-top:2px}
+.cmgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-top:10px}
+.cmcell .vl{font-size:11.5px;font-weight:700;color:var(--tx3);margin-bottom:3px}
+.cmcell pre{margin:0;background:var(--bg);border:1px solid var(--line2);border-radius:8px;padding:7px 9px;font-family:var(--mono);font-size:13px;white-space:pre-wrap;word-break:break-word;cursor:pointer;line-height:1.5}
+.cmcell pre.na{color:var(--tx3);cursor:default;font-family:var(--sans)}
+.cmcell pre.hit{border-color:var(--acc)}
+/* more */
+.tiles{display:grid;gap:10px}
+@media (min-width:760px){.tiles{grid-template-columns:repeat(3,1fr)}}
+.tile{display:block;text-decoration:none;color:var(--tx);background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.tile:hover{border-color:var(--acc)}
+.tile b{display:block;font-size:16px;margin-bottom:4px}
+.tile span{font-size:13px;color:var(--tx2)}
+@media (max-width:600px){.cmgrid{gap:6px;grid-template-columns:1fr}.cmcell{display:grid;grid-template-columns:62px 1fr;gap:8px;align-items:center}.cmcell .vl span{display:none}.cmcell .vl{margin:0;font-size:12px}}
+.cmsec{margin-bottom:6px}
+.cmh{display:flex;align-items:center;gap:8px;font-size:15px;margin:18px 2px 8px;color:var(--tx)}
+.cmh span{font-size:12px;font-weight:600;color:var(--tx3)}
+.chip i{font-style:normal;font-size:11px;color:var(--tx3);margin-left:2px}
+.chip.on i{color:inherit}
+.chip.zero{opacity:.45}
+.chip.ts{border-color:var(--warn);color:var(--warn)}
+.chip.ts.on{background:var(--warn-bg);color:var(--warn)}
+.tsmark{color:var(--warn);font-size:14px}
+@media (max-width:600px){.chips.cats{flex-wrap:wrap;overflow:visible;margin-left:0;margin-right:0;padding:0}}
+@media (min-width:900px){#v-cmd{max-width:1280px}}
+
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="side" aria-label="メニュー">
+    <div class="brand"><svg width="28" height="28" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#0d1215"/><path d="M16 10v5.5M16 15.5l-7 6M16 15.5l7 6" stroke="#3ddc97" stroke-width="2.2" fill="none" stroke-linecap="round"/><circle cx="16" cy="8.5" r="3.2" fill="#3ddc97"/><circle cx="9" cy="23" r="3.2" fill="#62a8ff"/><circle cx="23" cy="23" r="3.2" fill="#62a8ff"/></svg><div>NetKit<br><small>現場ツール</small></div></div>
+    <a href="#subnet" data-v="subnet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>サブネット計算</span></a><a href="#wildcard" data-v="wildcard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v16M5.1 8l13.8 8M18.9 8 5.1 16"/></svg><span>ワイルドカード</span></a><a href="#ports" data-v="ports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0V7zM12 17v5"/></svg><span>ポート番号</span></a><a href="#mac" data-v="mac"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9.5 9.5h5v5h-5zM9 1.5v3M15 1.5v3M9 19.5v3M15 19.5v3M1.5 9h3M1.5 15h3M19.5 9h3M19.5 15h3"/></svg><span>MACベンダー</span></a><a href="#mtu" data-v="mtu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18M3 12h12M3 17h7"/><path d="M17 15l3 3-3 3"/></svg><span>MTU / MSS 計算</span></a><a href="#cmd" data-v="cmd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/></svg><span>コマンド対訳</span></a><a href="#setup" data-v="setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11M7.5 9.5 12 14l4.5-4.5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span>オフライン・設定</span></a>
+    <div class="foot">v1.1.0 · 通信なしで動作</div>
+  </nav>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="brand"><svg width="28" height="28" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#0d1215"/><path d="M16 10v5.5M16 15.5l-7 6M16 15.5l7 6" stroke="#3ddc97" stroke-width="2.2" fill="none" stroke-linecap="round"/><circle cx="16" cy="8.5" r="3.2" fill="#3ddc97"/><circle cx="9" cy="23" r="3.2" fill="#62a8ff"/><circle cx="23" cy="23" r="3.2" fill="#62a8ff"/></svg><span>NetKit <small>現場ツール</small></span></div>
+      <div class="sp"></div>
+      <a class="pill" id="st-pill" href="#setup"><i></i><span>確認中…</span></a>
+      <button class="iconbtn" id="theme-btn" aria-label="テーマ切替" title="テーマ切替">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+    </header>
+
+    <!-- ============ サブネット ============ -->
+    <section class="view" id="v-subnet">
+      <h2 class="vt">サブネット計算</h2>
+      <p class="vd">IPv4 / IPv6 対応。「192.168.1.10/26」「10.0.0.5 255.255.0.0」「2001:db8::1/48」のように入力します。値はタップでコピーできます。</p>
+      <div class="card">
+        <label class="f" for="sn-in">アドレス / プレフィックス（またはマスク）</label>
+        <input id="sn-in" class="inp" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" value="192.168.10.37/26">
+        <div class="pfx"><b id="sn-pb">/26</b><input type="range" id="sn-pr" min="0" max="32" value="26" aria-label="プレフィックス長"></div>
+        <div id="sn-msg"></div>
+      </div>
+      <div class="card"><h3>計算結果 <span id="sn-type"></span></h3><div class="kv" id="sn-res"></div></div>
+      <div class="card" id="sn-bincard"><h3>2進数表示</h3><div class="bin" id="sn-bin"></div>
+        <div class="legend"><span><i style="background:var(--acc)"></i>ネットワーク部</span><span><i style="background:var(--host)"></i>ホスト部</span></div></div>
+      <div class="grid2">
+        <div class="card"><h3>このサブネットに含まれる？</h3>
+          <input id="sn-chk" class="inp" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="例: 192.168.10.50">
+          <div id="sn-chkr"></div></div>
+        <div class="card"><h3>必要ホスト数 → プレフィックス</h3>
+          <input id="sn-hosts" class="inp" inputmode="numeric" autocomplete="off" placeholder="例: 50">
+          <div id="sn-hr"></div></div>
+      </div>
+      <div class="card"><h3>サブネット分割</h3>
+        <div class="row"><div><label class="f" for="sn-split">分割後のプレフィックス</label><select id="sn-split" class="inp"></select></div>
+          <div class="nf"><button class="btn" id="sn-split-copy">一覧をコピー</button></div></div>
+        <div id="sn-split-info" class="count"></div>
+        <div class="tbl-wrap"><table class="t" id="sn-split-t"></table></div>
+      </div>
+      <div class="card"><details class="ref" id="sn-refbox"><summary>早見表（IPv4 /8〜/32）</summary>
+        <div class="tbl-wrap" style="margin-top:10px"><table class="t" id="sn-ref"></table></div></details></div>
+    </section>
+
+    <!-- ============ ワイルドカード ============ -->
+    <section class="view" id="v-wildcard">
+      <h2 class="vt">ワイルドカードマスク</h2>
+      <p class="vd">サブネットマスク ⇔ ワイルドカード ⇔ プレフィックスの変換、ACLの一致範囲の確認、IP範囲からACL/CIDRの生成。</p>
+      <div class="card"><h3>変換</h3>
+        <input id="wc-in" class="inp" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" value="0.0.0.255" placeholder="255.255.255.0 / 0.0.0.255 / 24">
+        <div style="margin-top:10px" class="seg" id="wc-mode"><button data-m="auto" class="on">自動判定</button><button data-m="mask">マスク</button><button data-m="wild">ワイルドカード</button></div>
+        <div id="wc-msg"></div>
+        <div class="kv" id="wc-res" style="margin-top:12px"></div>
+      </div>
+      <div class="card"><h3>ACL 一致チェック</h3>
+        <div class="row">
+          <div><label class="f" for="acl-addr">アドレス</label><input id="acl-addr" class="inp" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" value="192.168.0.0"></div>
+          <div><label class="f" for="acl-wc">ワイルドカード</label><input id="acl-wc" class="inp" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" value="0.0.254.255"></div>
+        </div>
+        <div id="acl-msg"></div>
+        <div class="kv" id="acl-res" style="margin-top:12px"></div>
+        <label class="f" for="acl-test" style="margin-top:14px">テストするIP</label>
+        <input id="acl-test" class="inp" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="例: 192.168.3.10">
+        <div id="acl-tr"></div>
+        <label class="f" style="margin-top:14px">設定例（タップでコピー）</label>
+        <pre class="code" id="acl-cfg"></pre>
+      </div>
+      <div class="card"><h3>IP範囲 → ACL / CIDR</h3>
+        <div class="row">
+          <div><label class="f" for="rg-s">開始IP</label><input id="rg-s" class="inp" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" value="10.0.0.5"></div>
+          <div><label class="f" for="rg-e">終了IP</label><input id="rg-e" class="inp" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" value="10.0.0.70"></div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <div><label class="f" for="rg-fmt">出力形式</label><select id="rg-fmt" class="inp">
+            <option value="cidr">CIDR</option><option value="wc">アドレス + ワイルドカード</option><option value="mask">アドレス + サブネットマスク</option>
+            <option value="std" selected>Cisco 標準ACL</option><option value="ext">Cisco 拡張ACL（送信元）</option><option value="ospf">OSPF network 文</option></select></div>
+          <div id="rg-aclopt" class="row" style="flex:1.2">
+            <div><label class="f" for="rg-name">ACL番号 / 名前</label><input id="rg-name" class="inp" autocomplete="off" autocapitalize="off" spellcheck="false" value="10" style="font-size:15px;padding:9px 10px"></div>
+            <div class="nf"><label class="f" for="rg-act">動作</label><select id="rg-act" class="inp"><option>permit</option><option>deny</option></select></div>
+          </div>
+        </div>
+        <div id="rg-msg"></div>
+        <div class="count" id="rg-info"></div>
+        <pre class="code" id="rg-out"></pre>
+      </div>
+    </section>
+
+    <!-- ============ ポート ============ -->
+    <section class="view" id="v-ports">
+      <h2 class="vt">ポート番号検索</h2>
+      <p class="vd">番号・サービス名・製品名・用途で検索（例: 443、ssh、veeam、check point、PLC、tcp 8000-8100）。約450件のポートと IPプロトコル番号（OSPF=89 など）を収録。</p>
+      <div class="card">
+        <input id="pt-q" class="inp" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="番号 / サービス名 / キーワード">
+        <div style="margin-top:10px" class="seg" id="pt-proto"><button data-p="all" class="on">すべて</button><button data-p="t">TCP</button><button data-p="u">UDP</button></div>
+        <div class="chips" id="pt-cats"></div>
+        <div id="pt-range"></div>
+      </div>
+      <div class="count" id="pt-count"></div>
+      <div class="plist" id="pt-list"></div>
+    </section>
+
+    <!-- ============ MAC ============ -->
+    <section class="view" id="v-mac">
+      <h2 class="vt">MACアドレス → ベンダー</h2>
+      <p class="vd">形式は自由（00:1A:2B:3C:4D:5E / 001a.2b3c.4d5e / 00-1A-2B… / OUIのみ）。<b>show arp</b> や <b>show mac address-table</b> の出力をそのまま貼り付けると一括で調べます。</p>
+      <div class="card">
+        <textarea id="mac-in" class="inp" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="00:50:56:a1:b2:c3&#10;001b.54aa.0101&#10;（複数行・コマンド出力の貼り付けOK）">00:50:56:a1:b2:c3</textarea>
+        <div id="mac-db" class="hint"></div>
+      </div>
+      <div id="mac-out"></div>
+    </section>
+
+    <!-- ============ MTU / MSS ============ -->
+    <section class="view" id="v-mtu">
+      <h2 class="vt">MTU / MSS 計算</h2>
+      <p class="vd">PPPoE・IPsec・GRE・VXLAN などを重ねたときに内側で使える MTU と TCP MSS を計算します。IPsec は暗号方式ごとのパディングまで考慮します。</p>
+      <div class="card"><h3>よくある構成</h3><div class="chips" id="mt-presets" style="margin-top:0"></div></div>
+      <div class="card"><h3>構成</h3>
+        <div class="seg" id="mt-mode"><button data-m="fwd" class="on">回線MTU → 内側</button><button data-m="rev">内側 → 必要な回線MTU</button></div>
+        <div class="row" style="margin-top:12px">
+          <div><label class="f" for="mt-base" id="mt-base-l">回線の IP MTU</label><input id="mt-base" class="inp" inputmode="numeric" autocomplete="off" value="1500"></div>
+          <div class="nf"><label class="f" for="mt-tags">VLANタグ</label><select id="mt-tags" class="inp"><option value="0">なし</option><option value="1">1（802.1Q）</option><option value="2">2（QinQ）</option></select></div>
+        </div>
+        <label class="f" style="margin-top:14px">カプセル化（上が外側）</label>
+        <div id="mt-layers" class="layers"></div>
+        <div class="row" style="margin-top:8px">
+          <div><select id="mt-add" class="inp"></select></div>
+          <div class="nf"><button class="btn" id="mt-addbtn">＋ 追加</button></div>
+        </div>
+      </div>
+      <div class="card"><h3>結果</h3><div class="kv" id="mt-res"></div>
+        <label class="f" style="margin-top:14px">パケット構成（外側 → 内側）</label>
+        <div class="stack" id="mt-stack"></div>
+        <div id="mt-note"></div></div>
+      <div class="card"><h3>設定例（タップでコピー）</h3>
+        <div class="seg" id="mt-vend"></div>
+        <pre class="code" id="mt-cfg" style="margin-top:10px"></pre>
+        <div class="hint">インターフェース名は環境に合わせて置き換えてください。</div></div>
+      <div class="card"><h3>実機で確認する（DF ビット付き ping）</h3>
+        <div class="row">
+          <div><label class="f" for="mt-pmtu">確認したい MTU</label><input id="mt-pmtu" class="inp" inputmode="numeric" autocomplete="off"></div>
+          <div><label class="f" for="mt-dst">宛先</label><input id="mt-dst" class="inp" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" value="192.0.2.1"></div>
+        </div>
+        <div class="kv" id="mt-ping" style="margin-top:12px"></div>
+        <div class="hint">データ部のサイズ = MTU − 28（IPヘッダ 20 + ICMPヘッダ 8）。Cisco IOS だけはパケット全体のサイズを指定します。</div>
+        <label class="f" for="mt-pl" style="margin-top:14px">通った最大のデータサイズから逆算</label>
+        <input id="mt-pl" class="inp" inputmode="numeric" autocomplete="off" placeholder="例: 1464（Windows の -l の値）">
+        <div id="mt-plr"></div></div>
+    </section>
+
+    <!-- ============ コマンド対訳 ============ -->
+    <section class="view" id="v-cmd">
+      <h2 class="vt">コマンド対訳</h2>
+      <p class="vd">Cisco・Juniper・Palo Alto・FortiGate・ヤマハの主要コマンドを分類別に横並びで比較。どのベンダーのコマンドでも、操作名（ARP、セッション、クリア…）でも検索できます。★はトラブルシュートでよく使うコマンドです。</p>
+      <div class="card">
+        <input id="cm-q" class="inp" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="例: show session all / get router / カウンタ / ページング">
+        <label class="f" style="margin-top:12px">表示するベンダー</label>
+        <div class="chips cats" id="cm-v" style="margin-top:0"></div>
+        <label class="f" style="margin-top:12px">分類</label>
+        <div class="chips cats" id="cm-cats" style="margin-top:0"></div>
+        <div class="hint">機種や OS バージョンで書式が異なる場合があります。「—」は該当コマンドなし／未収録。</div>
+      </div>
+      <div class="count" id="cm-count"></div>
+      <div id="cm-list"></div>
+    </section>
+
+    <!-- ============ その他（スマホ用メニュー） ============ -->
+    <section class="view" id="v-more">
+      <h2 class="vt">その他のツール</h2>
+      <p class="vd">&nbsp;</p>
+      <div class="tiles">
+        <a class="tile" href="#mtu"><b>MTU / MSS 計算</b><span>PPPoE・IPsec・GRE・VXLAN の重ね合わせ、ping での確認</span></a>
+        <a class="tile" href="#cmd"><b>コマンド対訳</b><span>Cisco / Juniper / Palo Alto / FortiGate / ヤマハ</span></a>
+        <a class="tile" href="#setup"><b>オフライン・設定</b><span>オフライン版の保存、MACベンダーDBの取り込み、テーマ</span></a>
+      </div>
+    </section>
+
+    <!-- ============ 設定 ============ -->
+    <section class="view" id="v-setup">
+      <h2 class="vt">オフライン・設定</h2>
+      <p class="vd">すべての計算と検索は端末内で完結し、外部との通信は行いません。</p>
+      <div class="card"><h3>オフライン利用</h3>
+        <div id="off-status"></div>
+        <div id="off-actions" class="row" style="margin-top:12px;align-items:center"></div>
+        <details class="ref" style="margin-top:14px"><summary>PC で使う</summary>
+          <ol class="steps">
+            <li>「オフライン版HTML」を保存する（zip内の <code>index.html</code> でも同じ）。</li>
+            <li>ファイルをダブルクリックしてブラウザ（Chrome / Edge / Firefox / Safari）で開く。インターネット接続なしで全機能が動きます。</li>
+            <li>USBメモリや共有フォルダに置いておけば、どの端末でも使えます。</li>
+          </ol></details>
+        <details class="ref" style="margin-top:8px"><summary>スマホ（iPhone / Android）で使う</summary>
+          <ol class="steps">
+            <li>zip（PWAパッケージ）の中身を、社内Webサーバ・NAS・GitHub Pages など <b>HTTPS</b> で見られる場所に置く。</li>
+            <li>スマホでそのURLを一度開く（この時点でオフライン用にキャッシュされます）。</li>
+            <li>iPhone：Safari の共有ボタン →「ホーム画面に追加」<br>Android：Chrome のメニュー →「アプリをインストール」（または「ホーム画面に追加」）</li>
+            <li>以後はホーム画面のアイコンから、機内モードや圏外でも起動できます。</li>
+          </ol>
+          <div class="hint">スマホのブラウザはHTMLファイルを直接開いても動かないことが多いため、この手順をおすすめします。</div></details>
+      </div>
+      <div class="card"><h3>MACベンダー データベース</h3>
+        <div id="oui-status"></div>
+        <div class="dropzone" id="oui-drop" style="margin-top:10px">
+          IEEE（oui.csv / oui.txt / mam.csv / oui36.csv）または Wireshark の manuf ファイルをドロップ<br>
+          <label class="btn sm" style="margin-top:8px">ファイルを選択<input type="file" id="oui-file" accept=".csv,.txt,text/plain,text/csv,*/*" multiple hidden></label>
+        </div>
+        <div id="oui-msg"></div>
+        <div class="hint">ネットにつながる場所で一度ダウンロードして取り込めば、以後はオフラインで全ベンダーを検索できます（取り込んだデータはこのブラウザ内に保存）。</div>
+        <div class="links" id="oui-links"></div>
+        <div style="margin-top:10px"><button class="btn sm" id="oui-clear">取り込んだデータを削除</button></div>
+      </div>
+      <div class="card"><h3>表示</h3>
+        <div class="seg" id="theme-seg"><button data-t="auto">端末に合わせる</button><button data-t="dark">ダーク</button><button data-t="light">ライト</button></div>
+      </div>
+      <div class="card"><h3>このアプリについて</h3>
+        <div class="kv">
+          <div class="k">バージョン</div><div class="v plain">1.1.0</div>
+          <div class="k">収録データ</div><div class="v plain" id="about-data"></div>
+          <div class="k">通信</div><div class="v plain">なし（外部ライブラリ・フォント不使用）</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<nav class="bnav" aria-label="メニュー"><a href="#subnet" data-v="subnet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>サブネット</span></a><a href="#wildcard" data-v="wildcard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v16M5.1 8l13.8 8M18.9 8 5.1 16"/></svg><span>ワイルド</span></a><a href="#ports" data-v="ports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0V7zM12 17v5"/></svg><span>ポート</span></a><a href="#mac" data-v="mac"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9.5 9.5h5v5h-5zM9 1.5v3M15 1.5v3M9 19.5v3M15 19.5v3M1.5 9h3M1.5 15h3M19.5 9h3M19.5 15h3"/></svg><span>MAC</span></a><a href="#more" data-v="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span>その他</span></a></nav>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+// [番号, プロトコル(t=TCP,u=UDP,b=両方,ip=IPプロトコル番号), サービス名, 説明, カテゴリ]
+const PORTS = [
+[20,'t','FTP-DATA','FTP データ転送（アクティブモード）','file'],
+[21,'t','FTP','FTP 制御','file'],
+[22,'t','SSH','SSH / SCP / SFTP / NETCONF over SSHの既定接続','remote'],
+[23,'t','Telnet','Telnet（平文。機器管理で現役の現場も）','remote'],
+[25,'t','SMTP','メールサーバ間転送','mail'],
+[37,'b','Time','旧式の時刻プロトコル（RFC 868）','infra'],
+[43,'t','WHOIS','WHOIS 照会','infra'],
+[49,'t','TACACS+','TACACS+ 機器ログイン認証・認可・アカウンティング','auth'],
+[53,'b','DNS','名前解決（通常UDP、ゾーン転送や大きな応答はTCP）','infra'],
+[67,'u','DHCP Server','DHCP / BOOTP サーバ側','infra'],
+[68,'u','DHCP Client','DHCP / BOOTP クライアント側','infra'],
+[69,'u','TFTP','TFTP（ファームウェア・コンフィグ転送、PXE）','file'],
+[80,'t','HTTP','Web','web'],
+[88,'b','Kerberos','Kerberos 認証（Active Directory）','auth'],
+[102,'t','ISO-TSAP / S7','ISO-TSAP、Siemens S7、IEC 61850 MMS（産業制御・変電所）','ot'],
+[110,'t','POP3','メール受信','mail'],
+[111,'b','RPCbind','ONC RPC portmapper（NFSで使用）','file'],
+[113,'t','Ident','Ident / AUTH','other'],
+[119,'t','NNTP','ネットニュース','other'],
+[123,'u','NTP','時刻同期','infra'],
+[135,'t','MS-RPC','Microsoft RPC エンドポイントマッパー','win'],
+[137,'u','NetBIOS-NS','NetBIOS 名前サービス','win'],
+[138,'u','NetBIOS-DGM','NetBIOS データグラム','win'],
+[139,'t','NetBIOS-SSN','NetBIOS セッション（旧SMB）','win'],
+[143,'t','IMAP','メール受信（IMAP4）','mail'],
+[161,'u','SNMP','SNMP ポーリング（エージェント側）','monitor'],
+[162,'u','SNMP Trap','SNMP トラップ / インフォーム受信','monitor'],
+[179,'t','BGP','BGP ピア','routing'],
+[389,'b','LDAP','ディレクトリ（Active Directory等）','auth'],
+[427,'b','SLP','Service Location Protocol','other'],
+[443,'t','HTTPS','Web（TLS）、DoH、SSTP VPN、多くの管理画面・クラウドサービス','web'],
+[443,'u','QUIC / HTTP/3','HTTP/3（QUIC）、Cisco AnyConnect DTLS','web'],
+[445,'t','SMB','SMB / CIFS ファイル共有、Active Directory','win'],
+[464,'b','kpasswd','Kerberos パスワード変更','auth'],
+[465,'t','SMTPS','SMTP over TLS（submissions）','mail'],
+[500,'u','IKE','ISAKMP / IKE（IPsec VPN 鍵交換）','vpn'],
+[502,'t','Modbus/TCP','Modbus（産業制御）','ot'],
+[513,'t','rlogin','rlogin','remote'],
+[514,'t','rsh','rsh（リモートシェル）。Syslog over TCP の慣例値としても使用','remote'],
+[514,'u','Syslog','Syslog（UDP）','monitor'],
+[515,'t','LPD','ラインプリンタデーモン（印刷）','print'],
+[520,'u','RIP','RIP v1/v2','routing'],
+[521,'u','RIPng','RIP for IPv6','routing'],
+[546,'u','DHCPv6 Client','DHCPv6 クライアント側','infra'],
+[547,'u','DHCPv6 Server','DHCPv6 サーバ / リレー側','infra'],
+[548,'t','AFP','Apple Filing Protocol','file'],
+[554,'b','RTSP','ストリーミング制御（監視カメラ・NVR）','media'],
+[587,'t','Submission','メール送信（SMTP AUTH / STARTTLS）','mail'],
+[593,'t','RPC over HTTP','Microsoft RPC over HTTP','win'],
+[623,'u','IPMI / RMCP','IPMI（BMC・iLO・iDRAC 等のリモート管理）','mgmt'],
+[631,'b','IPP','Internet Printing Protocol / CUPS','print'],
+[636,'t','LDAPS','LDAP over TLS','auth'],
+[639,'t','MSDP','Multicast Source Discovery Protocol','routing'],
+[646,'b','LDP','MPLS Label Distribution Protocol','routing'],
+[749,'t','Kerberos Admin','Kerberos 管理（kadmin）','auth'],
+[830,'t','NETCONF','NETCONF over SSH','mgmt'],
+[853,'t','DoT','DNS over TLS','infra'],
+[853,'u','DoQ','DNS over QUIC','infra'],
+[873,'t','rsync','rsync デーモン','file'],
+[902,'t','VMware ESXi','vSphere Client / コンソール（MKS）','virt'],
+[989,'t','FTPS-DATA','FTP over TLS データ','file'],
+[990,'t','FTPS','FTP over TLS 制御（暗黙的TLS）','file'],
+[993,'t','IMAPS','IMAP over TLS','mail'],
+[995,'t','POP3S','POP3 over TLS','mail'],
+[1080,'t','SOCKS','SOCKS プロキシ','proxy'],
+[1194,'u','OpenVPN','OpenVPN（既定UDP、TCPも可）','vpn'],
+[1433,'t','MS SQL','Microsoft SQL Server','db'],
+[1434,'u','MS SQL Browser','SQL Server Browser','db'],
+[1494,'t','Citrix ICA','Citrix ICA','remote'],
+[1521,'t','Oracle','Oracle Database リスナー','db'],
+[1645,'u','RADIUS（旧）','RADIUS 認証（旧ポート）','auth'],
+[1646,'u','RADIUS Acct（旧）','RADIUS アカウンティング（旧ポート）','auth'],
+[1688,'t','KMS','Windows / Office ボリュームライセンス認証','win'],
+[1701,'u','L2TP','L2TP（通常IPsecと併用）','vpn'],
+[1723,'t','PPTP','PPTP VPN（GRE IP47と併用）','vpn'],
+[1812,'u','RADIUS','RADIUS 認証（802.1X 等）','auth'],
+[1813,'u','RADIUS Acct','RADIUS アカウンティング','auth'],
+[1883,'t','MQTT','MQTT（IoT）','iot'],
+[1900,'u','SSDP','SSDP / UPnP 探索','infra'],
+[1985,'u','HSRP','Cisco HSRP（224.0.0.2 / v2は224.0.0.102）','routing'],
+[2000,'t','SCCP','Cisco Skinny（IP電話）','voip'],
+[2049,'b','NFS','Network File System','file'],
+[2055,'u','NetFlow','NetFlow エクスポート（慣例値。9995/9996も多い）','monitor'],
+[2181,'t','ZooKeeper','Apache ZooKeeper','db'],
+[2222,'t','SSH（代替）','SSHの代替ポートとして慣例的に使用','remote'],
+[2375,'t','Docker API','Docker デーモン API（非TLS・露出注意）','virt'],
+[2376,'t','Docker API TLS','Docker デーモン API（TLS）','virt'],
+[2379,'t','etcd','etcd クライアント','virt'],
+[2380,'t','etcd peer','etcd ピア通信','virt'],
+[2598,'t','Citrix CGP','Citrix セッション画面保持','remote'],
+[3000,'t','Grafana','Grafana 既定、Gitea、AdGuard Home 初期設定、Node.js 開発サーバ','monitor'],
+[3128,'t','Squid','Squid プロキシ','proxy'],
+[3222,'u','GLBP','Cisco GLBP','routing'],
+[3260,'t','iSCSI','iSCSI ターゲット','file'],
+[3268,'t','AD GC','Active Directory グローバルカタログ','auth'],
+[3269,'t','AD GC SSL','Active Directory グローバルカタログ（TLS）','auth'],
+[3306,'t','MySQL','MySQL / MariaDB','db'],
+[3389,'t','RDP','リモートデスクトップ','remote'],
+[3389,'u','RDP（UDP）','リモートデスクトップ UDP転送','remote'],
+[3478,'b','STUN / TURN','NAT越え（WebRTC、Teams は 3478〜3481、UniFi も使用）','voip'],
+[3702,'u','WS-Discovery','Web Services Discovery','win'],
+[3784,'u','BFD','Bidirectional Forwarding Detection（制御）','routing'],
+[4172,'b','PCoIP','PCoIP（VMware Horizon 等）','remote'],
+[4369,'t','EPMD','Erlang ポートマッパー（RabbitMQ 等）','msg'],
+[4500,'u','IPsec NAT-T','IPsec NATトラバーサル','vpn'],
+[4786,'t','Smart Install','Cisco Smart Install（不要なら無効化推奨）','mgmt'],
+[4789,'u','VXLAN','VXLAN カプセル化','infra'],
+[4840,'t','OPC UA','OPC Unified Architecture（産業制御）','ot'],
+[5000,'t','UPnP / Synology','Synology DSM（HTTP）、Docker Registry、Flask 等の開発サーバ','web'],
+[5001,'t','Synology / iperf2','Synology DSM（HTTPS）、iperf2 既定','web'],
+[5060,'b','SIP','SIP シグナリング','voip'],
+[5061,'t','SIPS','SIP over TLS','voip'],
+[5222,'t','XMPP','XMPP クライアント','msg'],
+[5223,'t','APNs（旧）','Apple Push 通知（フォールバック）','msg'],
+[5228,'t','FCM','Google Play / Firebase プッシュ通知','msg'],
+[5246,'u','CAPWAP 制御','無線LANコントローラ ⇔ AP 制御','infra'],
+[5247,'u','CAPWAP データ','無線LANコントローラ ⇔ AP データ','infra'],
+[5269,'t','XMPP S2S','XMPP サーバ間','msg'],
+[5353,'u','mDNS','マルチキャストDNS（Bonjour / Avahi）','infra'],
+[5355,'u','LLMNR','Link-Local Multicast Name Resolution','win'],
+[5357,'t','WSDAPI','Web Services on Devices','win'],
+[5432,'t','PostgreSQL','PostgreSQL','db'],
+[5480,'t','VAMI','vCenter アプライアンス管理画面','virt'],
+[5601,'t','Kibana','Kibana','monitor'],
+[5666,'t','NRPE','Nagios NRPE','monitor'],
+[5671,'t','AMQPS','AMQP over TLS','msg'],
+[5672,'t','AMQP','AMQP（RabbitMQ）','msg'],
+[5683,'u','CoAP','Constrained Application Protocol（IoT）','iot'],
+[5684,'u','CoAPS','CoAP over DTLS','iot'],
+[5900,'t','VNC','VNC（ディスプレイ :0。:1 は5901）','remote'],
+[5938,'t','TeamViewer','TeamViewer','remote'],
+[5985,'t','WinRM','WinRM / PowerShell リモート（HTTP）','win'],
+[5986,'t','WinRM HTTPS','WinRM / PowerShell リモート（HTTPS）','win'],
+[6000,'t','X11','X Window System','remote'],
+[6081,'u','Geneve','Geneve カプセル化','infra'],
+[6343,'u','sFlow','sFlow','monitor'],
+[6379,'t','Redis','Redis','db'],
+[6443,'t','Kubernetes API','Kubernetes API サーバ','virt'],
+[6514,'t','Syslog TLS','Syslog over TLS','monitor'],
+[6653,'t','OpenFlow','OpenFlow','infra'],
+[6667,'t','IRC','IRC','msg'],
+[7547,'t','TR-069','CWMP（ISPによるCPE遠隔管理）','mgmt'],
+[8000,'t','HTTP-alt','HTTP 代替、Splunk Web、VMware vMotion','web'],
+[8006,'t','Proxmox VE','Proxmox VE 管理画面','virt'],
+[8008,'t','HTTP-alt','HTTP 代替','web'],
+[8009,'t','AJP','Apache JServ Protocol（Tomcat）','web'],
+[8080,'t','HTTP-alt','HTTP 代替 / プロキシ、Tomcat、Jenkins、UniFi inform','web'],
+[8081,'t','HTTP-alt','HTTP 代替','web'],
+[8086,'t','InfluxDB','InfluxDB HTTP API','monitor'],
+[8291,'t','Winbox','MikroTik Winbox','mgmt'],
+[8443,'t','HTTPS-alt','HTTPS 代替（UniFi・各種アプライアンスの管理画面に多い）','web'],
+[8530,'t','WSUS','WSUS（HTTP）','win'],
+[8531,'t','WSUS SSL','WSUS（HTTPS）','win'],
+[8883,'t','MQTTS','MQTT over TLS','iot'],
+[8888,'t','HTTP-alt','HTTP 代替 / Jupyter','web'],
+[9000,'t','各種アプリ','PHP-FPM、MinIO、ClickHouse、SonarQube、Portainer(旧) 等','web'],
+[9042,'t','Cassandra','Apache Cassandra CQL','db'],
+[9090,'t','Prometheus','Prometheus / Cockpit','monitor'],
+[9092,'t','Kafka','Apache Kafka','msg'],
+[9100,'t','RAW印刷 / node_exporter','JetDirect RAW印刷、Prometheus node_exporter','print'],
+[9200,'t','Elasticsearch','Elasticsearch REST API','db'],
+[9300,'t','Elasticsearch','Elasticsearch ノード間通信','db'],
+[9389,'t','AD Web Services','Active Directory Web サービス','auth'],
+[9443,'t','HTTPS-alt','HTTPS 代替（Portainer 等）','web'],
+[9995,'u','NetFlow','NetFlow 受信（よく使われる値）','monitor'],
+[10000,'t','Webmin / NDMP','Webmin、NDMP（バックアップ）','mgmt'],
+[10050,'t','Zabbix Agent','Zabbix エージェント（パッシブ）','monitor'],
+[10051,'t','Zabbix Server','Zabbix サーバ（トラッパー／アクティブ）','monitor'],
+[11211,'b','Memcached','Memcached（UDP露出は反射攻撃に注意）','db'],
+[16992,'t','Intel AMT','Intel AMT（HTTP）','mgmt'],
+[16993,'t','Intel AMT TLS','Intel AMT（HTTPS）','mgmt'],
+[20000,'t','DNP3','DNP3（産業制御・電力）','ot'],
+[27017,'t','MongoDB','MongoDB','db'],
+[33434,'u','traceroute','UNIX系 traceroute の既定開始ポート','infra'],
+[41641,'u','Tailscale','Tailscale（WireGuard）','vpn'],
+[44818,'t','EtherNet/IP','EtherNet/IP（CIP）','ot'],
+[47808,'u','BACnet','BACnet/IP（ビル設備）','ot'],
+[51820,'u','WireGuard','WireGuard（慣例値）','vpn'],
+// IP プロトコル番号（ポートではない）
+[1,'ip','ICMP','IPプロトコル番号（ping / traceroute 応答）','proto'],
+[2,'ip','IGMP','IPプロトコル番号（マルチキャスト参加）','proto'],
+[4,'ip','IP-in-IP','IPプロトコル番号（IPv4カプセル化）','proto'],
+[6,'ip','TCP','IPプロトコル番号','proto'],
+[17,'ip','UDP','IPプロトコル番号','proto'],
+[41,'ip','IPv6','IPプロトコル番号（6in4 / 6to4 トンネル）','proto'],
+[47,'ip','GRE','IPプロトコル番号（GRE / PPTP）','proto'],
+[50,'ip','ESP','IPプロトコル番号（IPsec 暗号化）','proto'],
+[51,'ip','AH','IPプロトコル番号（IPsec 認証ヘッダ）','proto'],
+[58,'ip','ICMPv6','IPプロトコル番号（NDP / RA を含む）','proto'],
+[88,'ip','EIGRP','IPプロトコル番号（Cisco EIGRP）','proto'],
+[89,'ip','OSPF','IPプロトコル番号','proto'],
+[103,'ip','PIM','IPプロトコル番号（マルチキャストルーティング）','proto'],
+[112,'ip','VRRP / CARP','IPプロトコル番号（224.0.0.18。pfSense 等の CARP も 112）','proto'],
+[115,'ip','L2TPv3','IPプロトコル番号','proto'],
+[132,'ip','SCTP','IPプロトコル番号','proto'],
+];
+
+const PORT_CATS = {
+  web:'Web', mail:'メール', remote:'リモート', file:'ファイル', db:'DB', infra:'基盤',
+  routing:'ルーティング', auth:'認証', vpn:'VPN', voip:'音声', monitor:'監視', win:'Windows',
+  mgmt:'機器管理', virt:'仮想化', print:'印刷', proxy:'プロキシ', msg:'メッセージ', iot:'IoT',
+  ot:'産業制御', media:'映像', proto:'IPプロトコル', other:'その他'
+};
+
+// 追加分（data_ports.js の PORTS に結合される）
+PORTS.push(
+// --- 古典的サービス ---
+[7,'b','Echo','エコー（疎通確認用。通常は無効化）','other'],
+[9,'b','Discard','破棄サービス（Wake-on-LAN の送信先としても使用）','other'],
+[13,'b','Daytime','時刻文字列を返す旧サービス','other'],
+[17,'b','QOTD','Quote of the Day','other'],
+[19,'b','Chargen','文字生成（UDP は反射攻撃に悪用。無効化推奨）','other'],
+[24,'t','LMTP','Local Mail Transfer Protocol（慣例）','mail'],
+[42,'t','WINS Replication','WINS レプリケーション','win'],
+[79,'t','Finger','ユーザー情報照会','other'],
+[104,'t','DICOM','医用画像（PACS / モダリティ）','med'],
+[177,'u','XDMCP','X Display Manager','remote'],
+[194,'t','IRC','IRC（公式割当。実運用は 6667 が多い）','msg'],
+// --- 時刻・基盤 ---
+[319,'u','PTP Event','IEEE 1588 高精度時刻同期（イベント）','infra'],
+[320,'u','PTP General','IEEE 1588 高精度時刻同期（一般）','infra'],
+[434,'u','Mobile IP','Mobile IPv4 登録','routing'],
+[497,'b','Retrospect','Retrospect バックアップ','backup'],
+[512,'t','rexec','リモート実行','remote'],
+[517,'u','talk','talk','other'],
+[518,'u','ntalk','ntalk','other'],
+[524,'b','NCP','NetWare Core Protocol','file'],
+[540,'t','UUCP','UUCP','file'],
+[543,'t','klogin','Kerberos 版 rlogin','remote'],
+[544,'t','kshell','Kerberos 版 rsh','remote'],
+[563,'t','NNTPS','NNTP over TLS','other'],
+[601,'t','Syslog (reliable)','Syslog over TCP（RFC 3195）','monitor'],
+[647,'t','DHCP Failover','DHCP フェイルオーバー（ISC DHCP 等）','infra'],
+[847,'t','DHCP Failover 2','DHCP フェイルオーバー（ピア側の慣例値）','infra'],
+[664,'b','ASF Secure RMCP','IPMI / ASF セキュアRMCP','mgmt'],
+[691,'t','MS Exchange Routing','Exchange ルーティング（旧版）','mail'],
+[694,'u','Heartbeat','Linux-HA Heartbeat','infra'],
+[700,'t','EPP','Extensible Provisioning Protocol（ドメイン登録）','infra'],
+[711,'t','TDP','Cisco Tag Distribution Protocol（LDP の前身）','routing'],
+[783,'t','spamd','SpamAssassin','mail'],
+[802,'t','Modbus/TCP Security','Modbus over TLS','ot'],
+[861,'t','OWAMP','One-Way Active Measurement（制御）','monitor'],
+[862,'t','TWAMP','Two-Way Active Measurement（制御）','monitor'],
+[953,'t','rndc','BIND 制御チャネル','infra'],
+[992,'t','Telnets','Telnet over TLS','remote'],
+// --- 1024〜 ---
+[1099,'t','Java RMI','Java RMI レジストリ（JMX 等）','dev'],
+[1311,'t','Dell OpenManage','Dell OpenManage Server Administrator（HTTPS）','mgmt'],
+[1344,'t','ICAP','ICAP（プロキシ⇔ウイルス対策連携）','proxy'],
+[1352,'t','Lotus Notes','HCL / IBM Notes / Domino','mail'],
+[1414,'t','IBM MQ','IBM MQ リスナー','msg'],
+[1512,'b','WINS','Windows Internet Name Service','win'],
+[1514,'b','Wazuh Agent','Wazuh / OSSEC エージェント通信','sec'],
+[1515,'t','Wazuh Enroll','Wazuh エージェント登録','sec'],
+[1556,'t','NetBackup PBX','Veritas NetBackup（PBX）','backup'],
+[1589,'u','VQP','Cisco VLAN Query Protocol（VMPS）','infra'],
+[1666,'t','Perforce','Perforce Helix Core','dev'],
+[1700,'u','RADIUS CoA（Cisco）','RADIUS 動的認可 / CoA（Cisco ISE 等の既定）','auth'],
+[1718,'u','H.323 GK Discovery','H.323 ゲートキーパー探索','voip'],
+[1719,'u','H.323 RAS','H.323 登録・認証・状態','voip'],
+[1720,'t','H.225','H.323 呼制御シグナリング','voip'],
+[1801,'t','MSMQ','Microsoft Message Queuing','win'],
+[1880,'t','Node-RED','Node-RED エディタ','iot'],
+[1911,'t','Niagara Fox','Tridium Niagara Fox（ビル管理）','ot'],
+[1935,'t','RTMP','Real-Time Messaging Protocol（配信）','media'],
+[1967,'u','IP SLA Responder','Cisco IP SLA 制御メッセージ','monitor'],
+[1998,'t','XOT','Cisco X.25 over TCP','routing'],
+[2082,'t','cPanel','cPanel（HTTP）','web'],
+[2083,'t','cPanel SSL','cPanel（HTTPS）','web'],
+[2083,'t','RadSec','RADIUS over TLS','auth'],
+[2086,'t','WHM','cPanel WHM（HTTP）','web'],
+[2087,'t','WHM SSL','cPanel WHM（HTTPS）','web'],
+[2123,'u','GTP-C','GPRS Tunneling Protocol 制御（モバイルコア）','tel'],
+[2152,'u','GTP-U','GPRS Tunneling Protocol ユーザーデータ','tel'],
+[2222,'u','EtherNet/IP I/O','EtherNet/IP 暗黙的（サイクリック）I/O','ot'],
+[2233,'t','vSAN','VMware vSAN トランスポート','virt'],
+[2377,'t','Docker Swarm','Swarm クラスタ管理','virt'],
+[2381,'t','HPE SMH','HPE System Management Homepage（HTTPS）','mgmt'],
+[2383,'t','SSAS','SQL Server Analysis Services','db'],
+[2401,'t','CVS','CVS pserver','dev'],
+[2404,'t','IEC 104','IEC 60870-5-104（電力・SCADA）','ot'],
+[2427,'u','MGCP GW','MGCP ゲートウェイ','voip'],
+[2455,'t','CODESYS','CODESYS ランタイム（PLC）','ot'],
+[2483,'t','Oracle DB','Oracle Database（IANA 割当）','db'],
+[2484,'t','Oracle DB TLS','Oracle Database（TLS）','db'],
+[2500,'t','Veeam データ転送','Veeam Data Mover（2500〜3300）','backup'],
+[2575,'t','HL7 MLLP','HL7 メッセージ（医療情報連携）','med'],
+[2601,'t','zebra','Quagga / FRR zebra vty','routing'],
+[2604,'t','ospfd','Quagga / FRR ospfd vty','routing'],
+[2605,'t','bgpd','Quagga / FRR bgpd vty','routing'],
+[2638,'t','SQL Anywhere','SAP SQL Anywhere / Sybase','db'],
+[2701,'t','SCCM Remote Control','Configuration Manager リモート制御','win'],
+[2727,'u','MGCP CA','MGCP コールエージェント','voip'],
+[2748,'t','CTIQBE','Cisco CTI（TAPI / JTAPI）','voip'],
+[2775,'t','SMPP','SMS 配信プロトコル','tel'],
+[2888,'t','ZooKeeper peer','ZooKeeper フォロワー接続','db'],
+[2905,'s','M3UA','SIGTRAN M3UA（SS7 over IP）','tel'],
+[2944,'b','Megaco / H.248','メディアゲートウェイ制御','voip'],
+[2947,'t','gpsd','GPS デーモン','iot'],
+[3001,'t','Uptime Kuma','Uptime Kuma 既定 / 開発サーバ','monitor'],
+[3050,'t','Firebird','Firebird / InterBase','db'],
+[3052,'t','PowerChute','APC PowerChute（UPS）','mgmt'],
+[3100,'t','Loki','Grafana Loki','monitor'],
+[3200,'t','SAP Dispatcher','SAP ディスパッチャ（インスタンス00）','db'],
+[3205,'b','iSNS','iSCSI ネームサービス','file'],
+[3225,'t','FCIP','Fibre Channel over IP','file'],
+[3283,'b','Apple Remote Desktop','ARD（画面共有は 5900）','remote'],
+[3299,'t','SAProuter','SAP ルーター','db'],
+[3300,'t','Ceph Mon (v2)','Ceph モニタ msgr2','file'],
+[3300,'t','SAP Gateway','SAP ゲートウェイ（インスタンス00）','db'],
+[3310,'t','clamd','ClamAV デーモン','sec'],
+[3343,'u','Cluster Service','Windows フェイルオーバークラスタ','win'],
+[3391,'u','RD Gateway UDP','リモートデスクトップゲートウェイ UDP転送','remote'],
+[3493,'t','NUT','Network UPS Tools','mgmt'],
+[3544,'u','Teredo','Teredo トンネリング','infra'],
+[3551,'t','apcupsd','apcupsd ネットワーク情報','mgmt'],
+[3671,'u','KNXnet/IP','KNX（ビル・照明制御）','ot'],
+[3690,'t','Subversion','svnserve','dev'],
+[3785,'u','BFD Echo','BFD エコー','routing'],
+[3799,'u','RADIUS CoA','RADIUS 動的認可 / CoA（RFC 5176）','auth'],
+[3868,'t','Diameter','Diameter（SCTP でも使用）','tel'],
+[3888,'t','ZooKeeper election','ZooKeeper リーダー選出','db'],
+[3978,'t','Panorama','Palo Alto Panorama ⇔ ファイアウォール','sec'],
+[4000,'t','NoMachine','NoMachine（NX）','remote'],
+[4190,'t','ManageSieve','Sieve フィルタ管理','mail'],
+[4222,'t','NATS','NATS クライアント','msg'],
+[4341,'u','LISP Data','LISP データプレーン','routing'],
+[4342,'u','LISP Control','LISP コントロールプレーン','routing'],
+[4505,'t','Salt Publish','SaltStack Publisher','mgmt'],
+[4506,'t','Salt Return','SaltStack Request / Return','mgmt'],
+[4567,'t','Galera','MariaDB / MySQL Galera レプリケーション','db'],
+[4569,'u','IAX2','Asterisk IAX2','voip'],
+[4739,'b','IPFIX','IPFIX フロー収集','monitor'],
+[4784,'u','BFD Multihop','BFD マルチホップ','routing'],
+[4822,'t','guacd','Apache Guacamole プロキシ','remote'],
+[4843,'t','OPC UA TLS','OPC UA over TLS','ot'],
+[4848,'t','GlassFish Admin','GlassFish / Payara 管理','dev'],
+[4899,'t','Radmin','Radmin','remote'],
+[4911,'t','Niagara Fox TLS','Tridium Niagara Fox（TLS）','ot'],
+[5004,'u','RTP','RTP メディア（慣例値）','media'],
+[5005,'u','RTCP','RTP 制御（慣例値）','media'],
+[5038,'t','Asterisk AMI','Asterisk Manager Interface','voip'],
+[5044,'t','Beats → Logstash','Logstash Beats 入力','monitor'],
+[5094,'b','HART-IP','HART-IP（プロセス計装）','ot'],
+[5173,'t','Vite','Vite 開発サーバ','dev'],
+[5201,'b','iperf3','iperf3 帯域測定','monitor'],
+[5280,'t','XMPP BOSH','XMPP over HTTP','msg'],
+[5349,'t','TURNS','STUN / TURN over TLS','voip'],
+[5351,'u','NAT-PMP / PCP','ポートマッピング要求','infra'],
+[5405,'u','Corosync','Corosync クラスタ（Pacemaker / Proxmox）','infra'],
+[5540,'u','Matter','Matter（スマートホーム）','iot'],
+[5555,'t','ADB','Android Debug Bridge（ネットワーク）','dev'],
+[5665,'t','Icinga 2','Icinga 2 API / クラスタ','monitor'],
+[5667,'t','NSCA','Nagios パッシブチェック受信','monitor'],
+[5678,'u','MNDP','MikroTik Neighbor Discovery','mgmt'],
+[5722,'t','DFSR','DFS レプリケーション（RPC）','win'],
+[5723,'t','SCOM','System Center Operations Manager エージェント','win'],
+[5800,'t','VNC HTTP','VNC Web アクセス','remote'],
+[5984,'t','CouchDB','Apache CouchDB','db'],
+[6053,'t','ESPHome','ESPHome ネイティブAPI','iot'],
+[6129,'t','DameWare','DameWare Mini Remote Control','remote'],
+[6160,'t','Veeam Installer','Veeam Installer Service','backup'],
+[6516,'t','Windows Admin Center','Windows Admin Center（デスクトップ版の既定）','win'],
+[6556,'t','Checkmk Agent','Checkmk エージェント','monitor'],
+[6566,'t','SANE','ネットワークスキャナ','print'],
+[6600,'t','Hyper-V Live Migration','Hyper-V ライブマイグレーション','virt'],
+[6633,'t','OpenFlow（旧）','OpenFlow 旧ポート','infra'],
+[6635,'u','MPLS-in-UDP','MPLS over UDP','routing'],
+[6697,'t','IRC TLS','IRC over TLS','msg'],
+[6789,'t','Ceph Mon (v1)','Ceph モニタ（旧プロトコル）','file'],
+[6881,'b','BitTorrent','BitTorrent（6881〜6889）','file'],
+[7000,'t','AirPlay','Apple AirPlay','media'],
+[7001,'t','WebLogic','Oracle WebLogic（HTTP）','dev'],
+[7002,'t','WebLogic SSL','Oracle WebLogic（HTTPS）','dev'],
+[7070,'t','AnyDesk','AnyDesk 直接接続','remote'],
+[7199,'t','Cassandra JMX','Cassandra JMX 監視','db'],
+[7351,'u','Meraki Cloud','Meraki 機器 ⇔ クラウド管理','mgmt'],
+[7474,'t','Neo4j HTTP','Neo4j ブラウザ / HTTP API','db'],
+[7687,'t','Neo4j Bolt','Neo4j Bolt プロトコル','db'],
+[7680,'t','Delivery Optimization','Windows 配信の最適化（ピア間更新）','win'],
+[7946,'b','Docker Swarm Gossip','Swarm ノード間通信','virt'],
+[8005,'t','Tomcat Shutdown','Tomcat シャットダウンポート','web'],
+[8020,'t','HDFS NameNode','Hadoop HDFS NameNode RPC','db'],
+[8040,'t','ScreenConnect Web','ConnectWise ScreenConnect（Web）','remote'],
+[8041,'t','ScreenConnect Relay','ConnectWise ScreenConnect（リレー）','remote'],
+[8060,'t','Roku ECP','Roku 外部制御','media'],
+[8065,'t','Mattermost','Mattermost','msg'],
+[8088,'t','Splunk HEC / YARN','Splunk HTTP Event Collector、Hadoop YARN Web','monitor'],
+[8089,'t','Splunk 管理','Splunk 管理ポート（REST）','monitor'],
+[8091,'t','Couchbase','Couchbase Web コンソール','db'],
+[8096,'t','Jellyfin','Jellyfin メディアサーバ','media'],
+[8118,'t','Privoxy','Privoxy','proxy'],
+[8123,'t','Home Assistant','Home Assistant（ClickHouse HTTP も 8123）','iot'],
+[8140,'t','Puppet','Puppet サーバ','mgmt'],
+[8161,'t','ActiveMQ Console','ActiveMQ Web コンソール','msg'],
+[8172,'t','Web Deploy','IIS Web 管理サービス（Web Deploy）','win'],
+[8182,'b','vSphere HA','vSphere HA（FDM エージェント）','virt'],
+[8200,'t','Vault','HashiCorp Vault（MiniDLNA も 8200）','sec'],
+[8211,'u','Aruba PAPI','Aruba コントローラ ⇔ AP','mgmt'],
+[8300,'t','Consul RPC','Consul サーバ RPC','dev'],
+[8384,'t','Syncthing GUI','Syncthing Web GUI','file'],
+[8400,'t','Commvault','Commvault Communications Service','backup'],
+[8448,'t','Matrix Federation','Matrix サーバ間連携','msg'],
+[8472,'u','Flannel VXLAN','Flannel / Linux 既定の VXLAN ポート','virt'],
+[8500,'t','Consul HTTP','Consul HTTP API / UI','dev'],
+[8554,'t','RTSP-alt','RTSP 代替','media'],
+[8600,'b','Consul DNS','Consul DNS','dev'],
+[8728,'t','MikroTik API','RouterOS API','mgmt'],
+[8729,'t','MikroTik API SSL','RouterOS API（TLS）','mgmt'],
+[8787,'t','RStudio Server','RStudio Server','dev'],
+[8834,'t','Nessus','Tenable Nessus Web UI','sec'],
+[8905,'b','ISE Posture','Cisco ISE ポスチャ','auth'],
+[8953,'t','unbound-control','Unbound 制御','infra'],
+[8983,'t','Solr','Apache Solr','db'],
+[9050,'t','Tor SOCKS','Tor SOCKS プロキシ','proxy'],
+[9091,'t','Pushgateway','Prometheus Pushgateway','monitor'],
+[9093,'t','Alertmanager','Prometheus Alertmanager','monitor'],
+[9101,'t','Bacula Director','Bacula Director','backup'],
+[9102,'t','Bacula FD','Bacula File Daemon','backup'],
+[9103,'t','Bacula SD','Bacula Storage Daemon','backup'],
+[9115,'t','blackbox_exporter','Prometheus blackbox_exporter','monitor'],
+[9116,'t','snmp_exporter','Prometheus snmp_exporter','monitor'],
+[9182,'t','windows_exporter','Prometheus windows_exporter','monitor'],
+[9339,'t','gNMI','gNMI（ストリーミングテレメトリ）','mgmt'],
+[9392,'t','Veeam / GVM','Veeam Backup Service、Greenbone(OpenVAS) Web','backup'],
+[9418,'t','Git','Git プロトコル','dev'],
+[9600,'t','Logstash API','Logstash 監視 API','monitor'],
+[9600,'u','Omron FINS','オムロン FINS（PLC）','ot'],
+[9990,'t','WildFly Admin','WildFly / JBoss 管理コンソール','dev'],
+[9993,'u','ZeroTier','ZeroTier','vpn'],
+[9997,'t','Splunk Forwarder','Splunk フォワーダ受信','monitor'],
+[10001,'u','Ubiquiti Discovery','UniFi / Ubiquiti 機器探索','mgmt'],
+[10123,'t','SCCM Notification','Configuration Manager クライアント通知','win'],
+[10161,'t','SNMP over TLS','SNMP（TLS / DTLS）','monitor'],
+[10162,'t','SNMP Trap TLS','SNMP トラップ（TLS / DTLS）','monitor'],
+[10250,'t','kubelet','Kubernetes kubelet API','virt'],
+[10257,'t','kube-controller-manager','Kubernetes コントローラマネージャ','virt'],
+[10259,'t','kube-scheduler','Kubernetes スケジューラ','virt'],
+[10443,'t','SSL-VPN（慣例）','FortiGate SSL-VPN 等でよく使う値','vpn'],
+[11112,'t','DICOM','DICOM（IANA 割当の非特権ポート）','med'],
+[11371,'t','HKP','OpenPGP 鍵サーバ','sec'],
+[12201,'u','GELF','Graylog GELF 入力','monitor'],
+[12222,'u','LWAPP Control','LWAPP（旧 Cisco 無線制御）','infra'],
+[12223,'u','LWAPP Data','LWAPP（旧 Cisco 無線データ）','infra'],
+[12346,'u','SD-WAN DTLS','Cisco SD-WAN（vEdge）DTLS 制御','vpn'],
+[14147,'t','FileZilla Admin','FileZilla Server 管理','file'],
+[15672,'t','RabbitMQ Mgmt','RabbitMQ 管理 UI','msg'],
+[16379,'t','Redis Cluster Bus','Redis クラスタバス','db'],
+[16384,'u','RTP（Cisco）','RTP 音声メディア（Cisco 既定 16384〜32767）','voip'],
+[16509,'t','libvirt','libvirtd（TCP）','virt'],
+[16514,'t','libvirt TLS','libvirtd（TLS）','virt'],
+[16666,'u','WLC Mobility','Cisco WLC モビリティ','infra'],
+[18190,'t','Check Point CPMI','SmartConsole ⇔ 管理サーバ','sec'],
+[18191,'t','Check Point CPD','Check Point デーモン','sec'],
+[18210,'t','Check Point ICA Pull','証明書取得（SIC）','sec'],
+[18245,'t','GE SRTP','GE PLC（SRTP）','ot'],
+[18264,'t','Check Point ICA','証明書失効リスト（CRL）','sec'],
+[19999,'t','Netdata','Netdata','monitor'],
+[21027,'u','Syncthing Discovery','Syncthing ローカル探索','file'],
+[22000,'b','Syncthing','Syncthing 同期','file'],
+[22443,'b','Horizon Blast','VMware Horizon Blast Extreme','remote'],
+[23560,'t','PRTG Probe','PRTG リモートプローブ','monitor'],
+[24007,'t','GlusterFS','GlusterFS デーモン','file'],
+[24224,'b','Fluentd','Fluentd forward 入力','monitor'],
+[25565,'t','Minecraft','Minecraft Java 版サーバ','other'],
+[25672,'t','RabbitMQ Cluster','RabbitMQ ノード間通信','msg'],
+[26379,'t','Redis Sentinel','Redis Sentinel','db'],
+[28015,'t','RethinkDB','RethinkDB クライアント','db'],
+[30000,'t','K8s NodePort','Kubernetes NodePort 範囲（30000〜32767）の先頭','virt'],
+[30015,'t','SAP HANA','SAP HANA SQL（インスタンス00）','db'],
+[30718,'u','Lantronix','Lantronix デバイス探索','ot'],
+[32400,'t','Plex','Plex Media Server','media'],
+[34964,'u','PROFINET','PROFINET コンテキスト管理','ot'],
+[37777,'t','Dahua DVR','Dahua 系 DVR / NVR','media'],
+[49443,'t','AD FS','AD FS デバイス証明書認証','auth'],
+[50000,'t','Db2 / Jenkins Agent','IBM Db2 既定、Jenkins インバウンドエージェント','db'],
+[55000,'t','Wazuh API','Wazuh マネージャ API','sec'],
+[61616,'t','ActiveMQ','ActiveMQ OpenWire','msg'],
+// --- Check Point 低番号 / Fortinet ---
+[256,'t','Check Point FW1','ポリシーインストール','sec'],
+[257,'t','Check Point FW1 Log','ログ転送','sec'],
+[541,'t','FGFM','FortiGate ⇔ FortiManager','sec'],
+// --- IPプロトコル番号 追加 ---
+[46,'ip','RSVP','IPプロトコル番号（MPLS-TE 等）','proto'],
+[54,'ip','NHRP','IPプロトコル番号（DMVPN）','proto'],
+[97,'ip','EtherIP','IPプロトコル番号（Ethernet over IP）','proto'],
+[108,'ip','IPComp','IPプロトコル番号（IP圧縮）','proto'],
+[124,'ip','IS-IS over IPv4','IPプロトコル番号（通常 IS-IS は L2 直上）','proto'],
+);
+Object.assign(PORT_CATS, { med:'医療', tel:'キャリア', backup:'バックアップ', dev:'開発', sec:'セキュリティ' });
+
+// 内蔵OUI（現場でよく見かける主要ベンダーの抜粋）。完全版はIEEEの公開リストを取り込んで使う。
+const OUI_BUILTIN_SRC = {
+'Cisco Systems':'00000C 000142 000143 000163 000164 000196 000197 0001C7 0001C9 000216 000217 00024A 00024B 00027D 00027E 0002B9 0002BA 0002FC 0002FD 000331 000332 00036B 00036C 00039F 0003A0 0003E3 0003E4 0003FD 0003FE 000427 000428 00044D 00044E 00046D 00046E 00049A 00049B 0004C0 0004C1 0004DD 0004DE 000500 000501 000531 000532 00055E 00055F 000573 000574 00059A 00059B 0005DC 0005DD 000628 00062A 000652 000653 00067C 0006C1 0006D6 0006D7 0006F6 00070D 00070E 00074F 000750 00077D 000784 000785 0007B3 0007B4 0007EB 0007EC 000820 000821 00082F 000830 000831 000832 00087C 00087D 0008A3 0008A4 0008C2 0008E2 0008E3 000911 000912 000943 000944 00097B 00097C 0009B6 0009B7 0009E8 0009E9 000A41 000A42 000A8A 000A8B 000AB7 000AB8 000AF3 000AF4 000B45 000B46 000B5F 000B60 000B85 000BBE 000BBF 000BFC 000BFD 000C30 000C31 000C85 000C86 000CCE 000CCF 000D28 000D29 000D65 000D66 000DBC 000DBD 000DEC 000DED 000E38 000E39 000E83 000E84 000ED6 000ED7 000F23 000F24 000F34 000F35 000F8F 000F90 000FF7 000FF8 001007 00100B 00100D 001011 001014 00101F 001029 00102F 001054 001079 00107B 0010A6 0010F6 0010FF 001120 001121 00115C 00115D 001192 001193 0011BB 0011BC 001200 001201 001243 001244 00127F 001280 0012D9 0012DA 001319 00131A 00135F 001360 00137F 001380 0013C3 0013C4 00141B 00141C 001469 00146A 0014A8 0014A9 0014F1 0014F2 00152B 00152C 001562 001563 0015C6 0015C7 0015F9 0015FA 001646 001647 00169C 00169D 0016C7 0016C8 00170E 00170F 00173B 001759 00175A 001794 001795 0017DF 0017E0 001818 001819 001873 001874 0018B9 0018BA 001906 001907 00192F 001930 001955 001956 0019A9 0019AA 0019E7 0019E8 001A2F 001A30 001A6C 001A6D 001AA1 001AA2 001AE2 001AE3 001B0C 001B0D 001B2A 001B2B 001B53 001B54 001B8F 001B90 001BD4 001BD5 001C0E 001C0F 001C57 001C58 001CB0 001CB1 001CF6 001CF9 001D45 001D46 001D70 001D71 001DA1 001DA2 001DE5 001DE6 001E13 001E14 001E49 001E4A 001E79 001E7A 001EBD 001EBE 001EF6 001EF7 001F26 001F27 001F6C 001F6D 001F9D 001F9E 001FC9 001FCA 00211B 00211C 002155 002156 0021A0 0021A1 0021D7 0021D8 00220C 00220D 002255 002256 002290 002291 0022BD 0022BE 002304 002305 002333 002334 00235D 00235E 0023AB 0023AC 0023EA 0023EB 002413 002414 002450 002451 002497 002498 0024C3 0024C4 0024F7 0024F9 002545 002546 002583 002584 0025B4 0025B5 00260A 00260B 002651 002652 002698 002699 0026CA 0026CB 00270C 00270D 003019 003024 003040 003071 003078 00307B 003080 003085 003094 003096 0030A3 0030B6 0030F2 00400B 004096 00500B 00500F 005014 00502A 00503E 005050 005053 005054 005073 005080 0050A2 0050A7 0050BD 0050D1 0050E2 0050F0 006009 00602F 00603E 006047 00605C 006070 006083 00900C 009021 00902B 00905F 00906D 00906F 009086 009092 0090A6 0090AB 0090B1 0090BF 0090D9 0090F2 00B04A 00B064 00B08E 00B0C2 00D006 00D058 00D063 00D079 00D090 00D097 00D0BA 00D0BB 00D0BC 00D0C0 00D0D3 00D0E4 00D0FF 00E014 00E01E 00E034 00E04F 00E08F 00E0A3 00E0B0 00E0F7 00E0F9 00E0FE',
+'Cisco Meraki':'00180A 0C8DDB 881544 AC17C8 E0553D',
+'Linksys (Cisco-Linksys)':'000625 000C41 001217 0014BF 001839 001A70 001C10 001EE5 002129 00226B 002369 00259C C0C1C0',
+'Juniper Networks':'000585 0010DB 00121E 0014F6 0017CB 0019E2 001BC0 001DB5 001F12 002159 002283 00239C 0024DC 002688 2C6BF5 3C8AB0 3C94D5 40B4F0 5C5EAB 64649B 78FE3D 84B59C 88E0F3 EC3EF7 F4CC55',
+'Arista Networks':'001C73 28993A 444CA8 7483EF',
+'Extreme Networks':'000496 00E02B',
+'Brocade':'00051E 0027F8',
+'Fortinet':'00090F 04D590 085B0E 704CA5 906CAC E81CBA',
+'Palo Alto Networks':'001B17 00869C 08306B B40C25',
+'Check Point':'001C7F',
+'SonicWall':'0006B1 0017C5 18B169 C0EAE4',
+'Aruba (HPE)':'000B86 001A1E 00246C 204C03 24DEC6 6CF37F 94B40F 9C1C12 ACA31E D8C7C8',
+'Ruckus':'001D2E 0025C4 2C5D93 C4108A EC8CA2',
+'Ubiquiti':'00156D 002722 0418D6 24A43C 44D9E7 788A20 802AA8 F09FC2 FCECDA',
+'MikroTik':'000C42 4C5E0C 6C3B6B D4CA6D E48D8C',
+'Huawei':'001882 001E10 00259E 00464B 00E0FC 20F3A3 286ED4 4C1FCC 70723C AC853D E0247F',
+'H3C':'000FE2',
+'Allied Telesis':'0000F4 000941 001AEB ECCD6D',
+'Yamaha':'00A0DE AC44F2',
+'NEC':'00004C',
+'Fujitsu':'00000E 000B5D 001742 001999 003005',
+'Buffalo':'000740 000D0B 001601 001D73 0024A5 106F3F 18C2BF 4CE676 CCE1D5',
+'I-O DATA':'00A0B0',
+'DrayTek':'001DAA 00507F',
+'TP-Link':'001D0F 14CC20 18A6F7 30B5C2 50C7BF 60E327 98DAC4 A0F3C1 B04E26 C04A00 EC086B F4F26D',
+'NETGEAR':'00095B 000FB5 00146C 00184D 001B2F 001E2A 001F33 00223F 0024B2 0026F2 204E7F 28C68E 2CB05D 30469A 9C3DCF A021B7 C03F0E E091F5',
+'ASUSTek':'0011D8 001731 001A92 001BFC 001D60 001E8C 001FC6 002215 002354 00248C 002618 049226 08606E 107B44 1C872C 2C56DC 3085A9 50465D 60A44C AC220B BCEE7B F46D04',
+'Gigabyte':'001A4D 001D7D 001FD0 1C1B0D 50E549 74D435 E0D55E FCAA14',
+'ASRock':'7085C2 BC5FF4 D05099',
+'Dell':'00065B 000874 000BDB 000D56 000F1F 001143 00123F 001372 0015C5 00188B 0019B9 001AA0 001D09 001E4F 001EC9 00219B 002219 0024E8 0026B9 00B0D0 00C04F 001422 180373 1866DA 24B6FD 3417EB 5C260A 74867A 782BCB 842B2B 90B11C A4BADB B083FE B8AC6F D4AE52 D4BED9 ECF4BB F01FAF F48E38 F8B156 F8BC12',
+'HP / HPE':'0001E6 0001E7 000802 000E7F 001708 001B78 001CC4 001E0B 001F29 00215A 00237D 0025B3 002655 00306E 0060B0 3CD92B 9457A5 984BE1 9C8E99',
+'IBM':'0004AC 000629 00145E 001A64 00215E 40F2E9',
+'Supermicro':'002590 003048 0CC47A 3CECEF AC1F6B',
+'Intel':'0002B3 000347 000423 0007E9 000CF1 000E0C 000E35 001111 0012F0 001302 001320 0013CE 0013E8 001500 001517 00166F 001676 0016EA 0016EB 0018DE 0019D1 0019D2 001B21 001B77 001CBF 001CC0 001DE0 001DE1 001E64 001E65 001E67 00215C 00215D 00216A 00216B 0022FA 0022FB 0024D6 0024D7 0026C6 0026C7 00A0C9 00AA00 00AA01 00AA02 3CFDFE 685D43 7C7A91 8086F2 A0369F',
+'Realtek':'00E04C',
+'Broadcom':'000AF7 001018',
+'Mellanox (NVIDIA)':'0002C9 248A07 506B4B 7CFE90 98039B E41D2D EC0D9A',
+'VMware':'000569 000C29 001C14 005056',
+'Microsoft':'0003FF 0050F2 7C1E52',
+'Microsoft Hyper-V':'00155D',
+'Oracle VirtualBox':'080027',
+'Xen':'00163E',
+'Parallels':'001C42',
+'QEMU / KVM（ローカル管理）':'525400',
+'Apple':'000393 000502 000A27 000A95 000D93 0010FA 001124 001451 0016CB 0017F2 0019E3 001B63 001CB3 001D4F 001E52 001EC2 001F5B 001FF3 0021E9 002241 002312 002332 00236C 0023DF 002436 002500 00254B 0025BC 002608 00264A 0026B0 0026BB 003065 003EE1 0050E4 00A040 040CCE 1040F3 28CFE9 3C0754 406C8F 60334B 70CD60 7C6D62 A45E60 ACBC32 D023DB F0B479',
+'Samsung':'0000F0 0007AB 001247 001599 001632 001D25 002119 002339 002454 5C0A5B',
+'Google':'001A11 3C5AB4 546009 F4F5D8 F4F5E8',
+'Amazon':'44650D',
+'Xiaomi':'286C07 34CE00 64B473 F8A45F',
+'Sony':'00014A 0013A9 001DBA 0024BE',
+'Nintendo':'0009BF 0017AB 00191D 001F32 00241E 98B6E9 E84ECE',
+'Raspberry Pi':'28CDC1 2CCF67 B827EB D83ADD DCA632 E45F01',
+'Espressif (ESP32/ESP8266)':'240AC4 246F28 30AEA4 3C71BF A4CF12 BCDDC2',
+'Synology':'001132',
+'QNAP':'00089B 245EBE',
+'Western Digital':'00904C',
+'Canon':'000085 001E8F 180CAC F48139',
+'Brother':'001BA9 008077',
+'Seiko Epson':'000048 0026AB',
+'Ricoh':'000074 002673',
+'Xerox':'0000AA',
+'Kyocera':'00C0EE',
+'Lexmark':'000400 002000',
+'Zebra':'00074D',
+'Toshiba':'000039',
+'Hitachi':'000087',
+'Oki Electric':'008087',
+'Panasonic':'008045',
+'Axis Communications':'00408C ACCC8E B8A44F',
+'Hikvision':'2857BE 4419B6 4CBD8F 54C415 BCAD28 C056E3',
+'Dahua':'3CEF8C 4C11BF 9002A9 E0508B',
+'Polycom':'0004F2 64167F',
+'Yealink':'001565 805EC0',
+'Grandstream':'000B82',
+'Avaya':'00040D 001B4F',
+'PC Engines':'000DB9',
+};
+
+// 予約・特殊アドレス（ベンダーより優先して表示）
+const MAC_SPECIAL = [
+  ['FFFFFFFFFFFF', 12, 'ブロードキャスト'],
+  ['01000CCCCCCC', 12, 'Cisco CDP / VTP / DTP / PAgP'],
+  ['01000CCCCCCD', 12, 'Cisco PVST+'],
+  ['0180C2000000', 12, 'STP / RSTP / MSTP（BPDU）'],
+  ['0180C2000002', 12, 'LACP / スロープロトコル'],
+  ['0180C200000E', 12, 'LLDP'],
+  ['0180C2000003', 12, '802.1X（EAPOL）'],
+  ['0180C20000',   10, 'IEEE 802.1 予約（ブリッジ非転送）'],
+  ['00000C07AC',   10, 'HSRP v1 仮想MAC（末尾＝グループ番号）'],
+  ['00000C9FF',     9, 'HSRP v2 仮想MAC（末尾3桁＝グループ番号）'],
+  ['0007B400',      8, 'GLBP 仮想MAC'],
+  ['00005E0001',   10, 'VRRP（IPv4）仮想MAC（末尾＝VRID）'],
+  ['00005E0002',   10, 'VRRP（IPv6）仮想MAC（末尾＝VRID）'],
+  ['01005E',        6, 'IPv4 マルチキャスト'],
+  ['3333',          4, 'IPv6 マルチキャスト'],
+];
+
+// 取り込み先の案内
+const OUI_SOURCES = [
+  ['IEEE MA-L（oui.csv）','https://standards-oui.ieee.org/oui/oui.csv'],
+  ['IEEE MA-L（oui.txt）','https://standards-oui.ieee.org/oui/oui.txt'],
+  ['IEEE MA-M（mam.csv）','https://standards-oui.ieee.org/oui28/mam.csv'],
+  ['IEEE MA-S（oui36.csv）','https://standards-oui.ieee.org/oui36/oui36.csv'],
+  ['Wireshark manuf（全部入り）','https://www.wireshark.org/download/automated/data/manuf'],
+];
+
+// コマンド対訳。null = 該当なし／未収録。例の値（IF名・アドレス・名前）は置き換えて使う。
+// 例のIF名: Cisco Gi0/1 / Junos ge-0/0/1 / PAN-OS ethernet1/1 / FortiGate port1 / ヤマハ lan1
+const CMD_VENDORS = [
+  ['c', 'Cisco', 'IOS / IOS-XE'],
+  ['j', 'Juniper', 'Junos'],
+  ['p', 'Palo Alto', 'PAN-OS'],
+  ['f', 'FortiGate', 'FortiOS'],
+  ['y', 'ヤマハ', 'RTX'],
+];
+const CMD_CATS = {
+  cli: 'CLI・表示設定', base: '設定・保存', sys: 'システム・HW', log: 'ログ・デバッグ', if: 'インターフェース',
+  l2: 'ARP・MAC・L2', l3: 'ルーティング', sess: 'セッション・ポリシー', nat: 'NAT', vpn: 'VPN', ha: '冗長化（HA）',
+  svc: 'DHCP・NTP', diag: '疎通確認・キャプチャ', clr: 'クリア・リセット',
+};
+// [カテゴリ, 操作, 補足, {c,j,p,f,y}, トラブルシュートでよく使う=1]
+const CMDS = [
+// ---------------- CLI・表示設定 ----------------
+['cli','ページング（--More--）を無効化','ログ取得前の定番。Junos は各コマンド末尾に | no-more でも可',{c:'terminal length 0',j:'set cli screen-length 0',p:'set cli pager off',f:'config system console\n set output standard\nend',y:'console lines infinity'},1],
+['cli','ページングを元に戻す','',{c:'terminal length 24',j:'set cli screen-length 24',p:'set cli pager on',f:'config system console\n set output more\nend',y:'console lines 24'}],
+['cli','1行の表示幅を広げる（折り返し防止）','',{c:'terminal width 512',j:'set cli screen-width 1024',p:null,f:null,y:'console columns 200'}],
+['cli','出力に時刻を付ける','作業ログの証跡用',{c:'terminal exec prompt timestamp',j:'set cli timestamp',p:null,f:null,y:null}],
+['cli','debug / ログを SSH 画面に表示','Cisco は VTY 接続時に必要',{c:'terminal monitor',j:'monitor start messages',p:null,f:null,y:null},1],
+['cli','画面表示を止める','',{c:'terminal no monitor',j:'monitor stop',p:null,f:null,y:null}],
+['cli','set 形式で設定を表示','そのまま再投入できる形式',{c:null,j:'show configuration | display set',p:'set cli config-output-format set\nshow config running',f:null,y:null}],
+['cli','コマンド履歴','',{c:'show history',j:'show cli history',p:null,f:null,y:'show history'}],
+['cli','出力を文字列で絞り込む','',{c:'show running-config | include <文字列>',j:'show configuration | match <文字列>',p:'show config running | match <文字列>',f:'show full-configuration | grep <文字列>',y:'show config | grep <文字列>'},1],
+['cli','前後の行も含めて絞り込む','FortiGate の -f は該当する設定ブロックごと表示',{c:'show running-config | section <文字列>',j:'show configuration | display set | match <文字列>',p:null,f:'show full-configuration | grep -f <文字列>',y:null}],
+['cli','特権・管理者モードへ','',{c:'enable',j:null,p:null,f:null,y:'administrator'}],
+['cli','VDOM / 仮想システムを切り替え','',{c:null,j:null,p:'set system setting target-vsys vsys1',f:'config vdom\n edit root',y:null}],
+
+// ---------------- 設定・保存 ----------------
+['base','実行中の設定を表示','',{c:'show running-config',j:'show configuration',p:'show config running',f:'show full-configuration',y:'show config'},1],
+['base','変更した部分だけ表示','FortiGate の show は既定値から変えた部分のみ',{c:null,j:null,p:null,f:'show',y:null}],
+['base','特定の機能の設定だけ表示','',{c:'show running-config | section router ospf',j:'show configuration protocols ospf',p:'show config running | match ospf',f:'show router ospf',y:'show config | grep ospf'}],
+['base','起動時（保存済み）の設定を表示','',{c:'show startup-config',j:'show configuration',p:null,f:null,y:null}],
+['base','設定モードに入る','',{c:'configure terminal',j:'configure',p:'configure',f:'config <設定パス>',y:'administrator'}],
+['base','設定を反映・保存','FortiGate は end で即保存。PAN-OS / Junos は commit まで反映されない',{c:'copy running-config startup-config\nwrite memory',j:'commit',p:'commit',f:'end',y:'save'}],
+['base','反映前の確認（構文チェック）','',{c:null,j:'commit check',p:'validate full',f:null,y:null}],
+['base','変更差分を確認','',{c:'show archive config differences',j:'show | compare',p:'show config diff',f:null,y:null},1],
+['base','設定変更を破棄','',{c:null,j:'rollback 0',p:'revert config',f:'abort',y:null}],
+['base','前の設定に戻す','',{c:'configure replace flash:<ファイル>',j:'rollback 1\ncommit',p:'load config version <番号>\ncommit',f:null,y:null}],
+['base','設定ミスの保険（時間経過で自動復旧）','Cisco は reload cancel で取り消し',{c:'reload in 10',j:'commit confirmed 10',p:null,f:null,y:null}],
+['base','コミット履歴','',{c:null,j:'show system commit',p:'show jobs all',f:null,y:null}],
+['base','設定のバックアップを取得','',{c:'copy running-config tftp://192.0.2.10/r1.cfg',j:'save /var/tmp/backup.conf',p:'save config to backup.xml',f:'execute backup config tftp fg.conf 192.0.2.10',y:null}],
+['base','設定を取り消す（否定）','',{c:'no <コマンド>',j:'delete <階層>',p:'delete <パス>',f:'unset <項目>',y:'no <コマンド>'}],
+['base','ホスト名を設定','',{c:'hostname R1',j:'set system host-name R1',p:'set deviceconfig system hostname FW1',f:'config system global\n set hostname FG1\nend',y:'console prompt R1'}],
+['base','再起動','',{c:'reload',j:'request system reboot',p:'request restart system',f:'execute reboot',y:'restart'}],
+['base','シャットダウン','',{c:null,j:'request system power-off',p:'request shutdown system',f:'execute shutdown',y:null}],
+
+// ---------------- システム・HW ----------------
+['sys','バージョン・シリアル・稼働時間','',{c:'show version',j:'show version\nshow system uptime',p:'show system info',f:'get system status',y:'show environment'},1],
+['sys','ハードウェア構成','',{c:'show inventory',j:'show chassis hardware',p:'show system info',f:'get hardware status',y:'show environment'}],
+['sys','CPU 使用率','',{c:'show processes cpu sorted',j:'show chassis routing-engine',p:'show system resources\nshow running resource-monitor',f:'get system performance status',y:'show environment'},1],
+['sys','CPU 使用率の履歴（グラフ）','',{c:'show processes cpu history',j:null,p:'show running resource-monitor minute',f:null,y:null}],
+['sys','メモリ使用率','',{c:'show processes memory sorted',j:'show system memory',p:'show system resources',f:'get system performance status',y:'show environment'},1],
+['sys','プロセス一覧（top）','',{c:'show processes cpu sorted 5sec',j:'show system processes extensive',p:'show system resources follow',f:'diagnose sys top',y:null}],
+['sys','温度・電源・ファン','',{c:'show environment all',j:'show chassis environment',p:'show system environmentals',f:'execute sensor list',y:'show environment'}],
+['sys','アラーム','',{c:null,j:'show system alarms\nshow chassis alarms',p:null,f:null,y:null},1],
+['sys','ディスク使用量','',{c:'dir flash:',j:'show system storage',p:'show system disk-space',f:'diagnose sys flash list',y:null}],
+['sys','現在時刻','',{c:'show clock',j:'show system uptime',p:'show clock',f:'execute time\nexecute date',y:'show environment'}],
+['sys','ログイン中の管理者','',{c:'show users',j:'show system users',p:'show admins',f:'get system info admin status',y:'show status user'}],
+['sys','ライセンス','',{c:'show license summary',j:'show system license',p:'request license info',f:'get system fortiguard-service status',y:null}],
+['sys','スタック構成','',{c:'show switch',j:'show virtual-chassis',p:null,f:null,y:null}],
+['sys','サポート用情報の一括取得','出力が非常に長い',{c:'show tech-support',j:'request support information | save /var/tmp/rsi.txt',p:null,f:'execute tac report',y:'show tech-info'}],
+
+// ---------------- ログ・デバッグ ----------------
+['log','ログを表示','',{c:'show logging',j:'show log messages',p:'show log system',f:'execute log display',y:'show log'},1],
+['log','ログを文字列で絞り込む','',{c:'show logging | include <文字列>',j:'show log messages | match <文字列>',p:'show log system | match <文字列>',f:null,y:'show log | grep <文字列>'},1],
+['log','最新のログだけ見る','',{c:null,j:'show log messages | last 50',p:'show log system direction equal backward',f:null,y:null}],
+['log','ログをリアルタイムで追う','',{c:'terminal monitor',j:'monitor start messages',p:'tail follow yes mp-log ms.log',f:null,y:null},1],
+['log','トラフィックログ','',{c:null,j:null,p:'show log traffic',f:'execute log filter category 0\nexecute log display',y:null}],
+['log','debug をすべて停止','debug を流したまま放置しない',{c:'undebug all',j:'monitor stop',p:'debug dataplane packet-diag clear all',f:'diagnose debug disable\ndiagnose debug reset',y:null},1],
+['log','有効な debug を確認','',{c:'show debugging',j:null,p:null,f:'diagnose debug info',y:null}],
+['log','クラッシュログ','',{c:'dir crashinfo:',j:'show system core-dumps',p:'show system files',f:'diagnose debug crashlog read',y:null}],
+
+// ---------------- インターフェース ----------------
+['if','インターフェース一覧（状態・IP）','',{c:'show ip interface brief',j:'show interfaces terse',p:'show interface all',f:'get system interface physical',y:'show status lan1'},1],
+['if','ポート状態一覧（速度・Duplex・VLAN）','',{c:'show interfaces status',j:'show interfaces terse',p:'show interface all',f:'get system interface physical',y:null},1],
+['if','インターフェース詳細・エラーカウンタ','',{c:'show interfaces Gi0/1',j:'show interfaces ge-0/0/1 extensive',p:'show interface ethernet1/1',f:'diagnose hardware deviceinfo nic port1',y:'show status lan1'},1],
+['if','エラーのあるポートを探す','CRC・input errors は配線や光レベル不良のサイン',{c:'show interfaces counters errors',j:'show interfaces extensive | match "error|drops"',p:'show counter interface ethernet1/1',f:'diagnose hardware deviceinfo nic port1 | grep -i err',y:null},1],
+['if','err-disabled のポート','',{c:'show interfaces status err-disabled',j:null,p:null,f:null,y:null},1],
+['if','リアルタイムのトラフィック量','',{c:'show interfaces Gi0/1 | include rate',j:'monitor interface ge-0/0/1',p:null,f:'diagnose netlink interface list port1',y:null},1],
+['if','光モジュール（受光レベル）','',{c:'show interfaces transceiver detail',j:'show interfaces diagnostics optics ge-0/0/1',p:null,f:'get system interface transceiver',y:null},1],
+['if','ケーブル診断（TDR）','Catalyst 系。実行中はリンクが一瞬落ちる機種あり',{c:'test cable-diagnostics tdr interface Gi1/0/1\nshow cable-diagnostics tdr interface Gi1/0/1',j:'request diagnostics tdr start interface ge-0/0/1\nshow diagnostics tdr interface ge-0/0/1',p:null,f:null,y:null},1],
+['if','インターフェースの適用 ACL・IP 設定','',{c:'show ip interface Gi0/1',j:'show interfaces ge-0/0/1 detail',p:'show interface ethernet1/1',f:'show system interface port1',y:'show config | grep lan1'}],
+['if','インターフェースを有効化','',{c:'interface Gi0/1\n no shutdown',j:'delete interfaces ge-0/0/1 disable',p:null,f:'config system interface\n edit port1\n set status up\nend',y:null}],
+['if','インターフェースを無効化','',{c:'interface Gi0/1\n shutdown',j:'set interfaces ge-0/0/1 disable',p:null,f:'config system interface\n edit port1\n set status down\nend',y:null}],
+['if','QoS のドロップ・統計','',{c:'show policy-map interface Gi0/1',j:'show interfaces queue ge-0/0/1',p:null,f:'diagnose netlink interface list port1',y:null}],
+['if','PPPoE の接続状態','',{c:'show pppoe session',j:'show pppoe interfaces',p:null,f:null,y:'show status pp 1'},1],
+['if','LLDP 隣接機器','',{c:'show lldp neighbors detail',j:'show lldp neighbors',p:'show lldp neighbors all',f:'diagnose lldprx neighbor summary',y:null},1],
+['if','CDP 隣接機器','Cisco 独自',{c:'show cdp neighbors detail',j:null,p:null,f:null,y:null},1],
+['if','PoE 給電状態','',{c:'show power inline',j:'show poe interface',p:null,f:null,y:null}],
+['if','リンクアグリゲーション（LACP）','',{c:'show etherchannel summary',j:'show lacp interfaces',p:'show lacp aggregate-ethernet all',f:'diagnose netlink aggregate name <集約IF名>',y:null},1],
+
+// ---------------- ARP・MAC・L2 ----------------
+['l2','ARP テーブル','',{c:'show ip arp',j:'show arp no-resolve',p:'show arp all',f:'get system arp',y:'show arp'},1],
+['l2','特定 IP の ARP','',{c:'show ip arp 10.1.1.10',j:'show arp no-resolve hostname 10.1.1.10',p:'show arp ethernet1/1',f:'get system arp | grep 10.1.1.10',y:'show arp | grep 10.1.1.10'},1],
+['l2','MAC アドレステーブル','',{c:'show mac address-table',j:'show ethernet-switching table',p:'show mac all',f:'diagnose netlink brctl name host <ブリッジ名>',y:null},1],
+['l2','特定 MAC がどのポートにいるか','',{c:'show mac address-table address 0011.2233.4455',j:'show ethernet-switching table | match 00:11:22:33:44:55',p:'show mac all | match 00:11:22:33:44:55',f:null,y:null},1],
+['l2','VLAN 一覧','',{c:'show vlan brief',j:'show vlans',p:null,f:'show system interface | grep -f vlanid',y:null}],
+['l2','トランクポートの状態','',{c:'show interfaces trunk',j:'show ethernet-switching interface',p:null,f:null,y:null},1],
+['l2','スパニングツリー','',{c:'show spanning-tree',j:'show spanning-tree interface',p:null,f:null,y:null},1],
+['l2','STP でブロック中のポート','',{c:'show spanning-tree blockedports',j:'show spanning-tree interface | match BLK',p:null,f:null,y:null},1],
+['l2','STP ルートブリッジ','',{c:'show spanning-tree root',j:'show spanning-tree bridge',p:null,f:null,y:null}],
+
+// ---------------- ルーティング ----------------
+['l3','ルーティングテーブル','PAN-OS の Advanced Routing 有効時は show advanced-routing route',{c:'show ip route',j:'show route',p:'show routing route',f:'get router info routing-table all',y:'show ip route'},1],
+['l3','特定宛先の経路','',{c:'show ip route 8.8.8.8',j:'show route 8.8.8.8',p:'test routing fib-lookup virtual-router default ip 8.8.8.8',f:'get router info routing-table details 8.8.8.8',y:'show ip route 8.8.8.8'},1],
+['l3','実際の転送先（FIB）','',{c:'show ip cef 8.8.8.8',j:'show route forwarding-table destination 8.8.8.8',p:'show routing fib',f:'diagnose ip route list',y:null}],
+['l3','経路の要約（件数）','',{c:'show ip route summary',j:'show route summary',p:'show routing summary',f:'get router info routing-table database',y:null}],
+['l3','動作中のルーティングプロトコル','',{c:'show ip protocols',j:'show configuration protocols',p:null,f:'get router info protocols',y:null}],
+['l3','OSPF ネイバー','',{c:'show ip ospf neighbor',j:'show ospf neighbor',p:'show routing protocol ospf neighbor',f:'get router info ospf neighbor',y:'show ip ospf neighbor'},1],
+['l3','OSPF インターフェース','',{c:'show ip ospf interface brief',j:'show ospf interface',p:'show routing protocol ospf interface',f:'get router info ospf interface',y:null}],
+['l3','OSPF データベース','',{c:'show ip ospf database',j:'show ospf database',p:'show routing protocol ospf lsdb',f:'get router info ospf database brief',y:'show ip ospf database'}],
+['l3','BGP ピア状態','',{c:'show ip bgp summary',j:'show bgp summary',p:'show routing protocol bgp summary',f:'get router info bgp summary',y:'show ip bgp neighbor'},1],
+['l3','BGP で広告している経路','',{c:'show ip bgp neighbors 192.0.2.1 advertised-routes',j:'show route advertising-protocol bgp 192.0.2.1',p:'show routing protocol bgp rib-out',f:'get router info bgp neighbors 192.0.2.1 advertised-routes',y:null},1],
+['l3','BGP で受信した経路','Cisco は soft-reconfiguration inbound が必要な場合あり',{c:'show ip bgp neighbors 192.0.2.1 routes',j:'show route receive-protocol bgp 192.0.2.1',p:'show routing protocol bgp loc-rib',f:'get router info bgp neighbors 192.0.2.1 routes',y:null},1],
+['l3','デフォルトルートを設定','',{c:'ip route 0.0.0.0 0.0.0.0 192.168.1.254',j:'set routing-options static route 0.0.0.0/0 next-hop 192.168.1.254',p:'set network virtual-router default routing-table ip static-route default destination 0.0.0.0/0 nexthop ip-address 192.168.1.254',f:'config router static\n edit 0\n set gateway 192.168.1.254\n set device port1\nend',y:'ip route default gateway 192.168.1.254'}],
+['l3','経路監視・トラック状態','',{c:'show track\nshow ip sla statistics',j:'show services rpm probe-results',p:'show routing path-monitor',f:'diagnose sys link-monitor status',y:null}],
+
+// ---------------- セッション・ポリシー ----------------
+['sess','セッション一覧','',{c:null,j:'show security flow session',p:'show session all',f:'diagnose sys session list',y:null},1],
+['sess','特定 IP のセッションを見る','FortiGate はフィルタを設定してから list',{c:null,j:'show security flow session source-prefix 10.1.1.10',p:'show session all filter source 10.1.1.10',f:'diagnose sys session filter src 10.1.1.10\ndiagnose sys session list',y:null},1],
+['sess','セッション数・統計','',{c:null,j:'show security flow session summary',p:'show session info',f:'diagnose sys session stat',y:null},1],
+['sess','どのポリシーに一致するか確認','実際に通信を流さずに判定できる',{c:null,j:'show security match-policies from-zone trust to-zone untrust source-ip 10.1.1.10 destination-ip 8.8.8.8 source-port 50000 destination-port 443 protocol tcp',p:'test security-policy-match from trust to untrust source 10.1.1.10 destination 8.8.8.8 protocol 6 destination-port 443',f:'diagnose firewall iprope lookup 10.1.1.10 50000 8.8.8.8 443 tcp port1',y:null},1],
+['sess','ポリシーのヒット数','',{c:'show access-lists',j:'show security policies hit-count',p:'show rule-hit-count vsys vsys1 rule-base security rules all',f:'diagnose firewall iprope show 100004 <ポリシーID>',y:null},1],
+['sess','パケットが破棄された理由','Palo Alto は delta yes で前回からの差分',{c:null,j:'show security flow statistics',p:'show counter global filter delta yes severity drop',f:'diagnose debug flow filter addr 10.1.1.10\ndiagnose debug flow trace start 10\ndiagnose debug enable',y:null},1],
+['sess','パケットの処理経路を追跡（フロー debug）','終わったら debug を停止',{c:null,j:'set security flow traceoptions flag basic-datapath',p:'debug dataplane packet-diag set filter match source 10.1.1.10\ndebug dataplane packet-diag set filter on\ndebug dataplane packet-diag set log feature flow basic\ndebug dataplane packet-diag set log on',f:'diagnose debug flow filter addr 10.1.1.10\ndiagnose debug flow show function-name enable\ndiagnose debug enable\ndiagnose debug flow trace start 20',y:null},1],
+['sess','ACL（フィルタ）一覧','',{c:'show access-lists',j:'show firewall',p:'show running security-policy',f:'show firewall policy',y:'show config | grep "ip filter"'}],
+['sess','ユーザー ID と IP の対応','',{c:null,j:null,p:'show user ip-user-mapping all',f:'diagnose firewall auth list',y:null}],
+
+// ---------------- NAT ----------------
+['nat','NAT 変換テーブル','',{c:'show ip nat translations',j:'show security flow session nat',p:'show session all filter nat source',f:'diagnose sys session list | grep hook=',y:'show nat descriptor address'},1],
+['nat','NAT 統計','',{c:'show ip nat statistics',j:'show security nat source summary',p:'show running nat-policy',f:'diagnose sys session stat',y:'show nat descriptor address'}],
+['nat','NAT ルール一覧','',{c:'show running-config | include ip nat',j:'show security nat source rule all',p:'show running nat-policy',f:'show firewall central-snat-map\nshow firewall vip',y:'show config | grep nat'}],
+['nat','どの NAT ルールに一致するか確認','',{c:null,j:null,p:'test nat-policy-match from trust to untrust source 10.1.1.10 destination 8.8.8.8 protocol 6 destination-port 443',f:null,y:null},1],
+
+// ---------------- VPN ----------------
+['vpn','IKE（フェーズ1）の状態','',{c:'show crypto isakmp sa\nshow crypto ikev2 sa',j:'show security ike security-associations',p:'show vpn ike-sa',f:'diagnose vpn ike gateway list',y:'show ipsec sa'},1],
+['vpn','IPsec（フェーズ2）の状態','',{c:'show crypto ipsec sa',j:'show security ipsec security-associations',p:'show vpn ipsec-sa',f:'get vpn ipsec tunnel summary',y:'show ipsec sa'},1],
+['vpn','VPN トンネル一覧・通信量','',{c:'show crypto session',j:'show security ipsec statistics',p:'show vpn flow',f:'diagnose vpn tunnel list',y:'show status tunnel 1'},1],
+['vpn','トンネルを手動で確立','',{c:null,j:null,p:'test vpn ike-sa gateway <GW名>\ntest vpn ipsec-sa tunnel <トンネル名>',f:'diagnose vpn tunnel up <フェーズ2名>',y:null},1],
+['vpn','IKE のネゴシエーションを debug','終わったら debug を停止',{c:'debug crypto isakmp\ndebug crypto ipsec',j:'set security ike traceoptions flag all',p:'debug ike global on debug\nless mp-log ikemgr.log',f:'diagnose debug application ike -1\ndiagnose debug enable',y:null},1],
+['vpn','リモートアクセス VPN のユーザー','',{c:null,j:null,p:'show global-protect-gateway current-user',f:'get vpn ssl monitor',y:null}],
+
+// ---------------- 冗長化（HA） ----------------
+['ha','HA / クラスタの状態','',{c:'show standby brief\nshow vrrp brief',j:'show chassis cluster status',p:'show high-availability state',f:'get system ha status',y:'show status vrrp'},1],
+['ha','HA の詳細・同期状態','',{c:'show redundancy',j:'show chassis cluster information',p:'show high-availability all',f:'diagnose sys ha checksum cluster',y:null},1],
+['ha','手動で切り替え（フェイルオーバー）','本番では影響範囲を確認してから',{c:null,j:'request chassis cluster failover redundancy-group 1 node 1',p:'request high-availability state suspend',f:'diagnose sys ha reset-uptime',y:null}],
+['ha','VRRP 状態','',{c:'show vrrp brief',j:'show vrrp summary',p:null,f:'get router info vrrp',y:'show status vrrp'}],
+
+// ---------------- DHCP・NTP ----------------
+['svc','DHCP 払い出し状況','',{c:'show ip dhcp binding',j:'show dhcp server binding',p:'show dhcp server lease interface all',f:'execute dhcp lease-list',y:'show status dhcp'},1],
+['svc','DHCP プールの使用状況','',{c:'show ip dhcp pool',j:'show dhcp server statistics',p:'show dhcp server settings all',f:'execute dhcp lease-list',y:'show status dhcp'}],
+['svc','DHCP クライアントの取得状況','WAN 側で DHCP を使う場合',{c:'show dhcp lease',j:'show dhcp client binding',p:'show dhcp client state all',f:'diagnose ip address list',y:'show status dhcpc'}],
+['svc','NTP 同期状態','',{c:'show ntp associations\nshow ntp status',j:'show ntp associations\nshow ntp status',p:'show ntp',f:'diagnose sys ntp status',y:null},1],
+['svc','DNS 名前解決のテスト','',{c:'ping www.example.com',j:'show host www.example.com',p:'ping host www.example.com',f:'execute ping www.example.com',y:'ping www.example.com'}],
+
+// ---------------- 疎通確認・キャプチャ ----------------
+['diag','ping','',{c:'ping 8.8.8.8',j:'ping 8.8.8.8 count 5',p:'ping host 8.8.8.8',f:'execute ping 8.8.8.8',y:'ping 8.8.8.8'},1],
+['diag','ping（送信元を指定）','',{c:'ping 8.8.8.8 source Gi0/1',j:'ping 8.8.8.8 source 192.168.1.1',p:'ping source 192.168.1.1 host 8.8.8.8',f:'execute ping-options source 192.168.1.1\nexecute ping 8.8.8.8',y:'ping -sa 192.168.1.1 8.8.8.8'},1],
+['diag','ping（連続・大量）','',{c:'ping 8.8.8.8 repeat 1000',j:'ping 8.8.8.8 rapid count 1000',p:'ping count 1000 host 8.8.8.8',f:'execute ping-options repeat-count 1000\nexecute ping 8.8.8.8',y:'ping -c 1000 8.8.8.8'}],
+['diag','ping（サイズ指定・分割禁止）','Cisco はIPパケット全体、他はデータ部（= MTU − 28）',{c:'ping 8.8.8.8 size 1500 df-bit',j:'ping 8.8.8.8 size 1472 do-not-fragment',p:'ping do-not-fragment yes size 1472 host 8.8.8.8',f:'execute ping-options df-bit yes\nexecute ping-options data-size 1472\nexecute ping 8.8.8.8',y:null},1],
+['diag','traceroute','',{c:'traceroute 8.8.8.8',j:'traceroute 8.8.8.8',p:'traceroute host 8.8.8.8',f:'execute traceroute 8.8.8.8',y:'traceroute 8.8.8.8'},1],
+['diag','TCP ポートの疎通確認','',{c:'telnet 192.0.2.10 443',j:'telnet 192.0.2.10 port 443',p:null,f:'execute telnet 192.0.2.10 443',y:null},1],
+['diag','パケットキャプチャ（画面に表示）','',{c:'monitor capture CAP interface Gi0/1 both\nmonitor capture CAP match ipv4 host 10.1.1.10 any\nmonitor capture CAP start\nshow monitor capture CAP buffer brief',j:'monitor traffic interface ge-0/0/1 matching "host 10.1.1.10"',p:'debug dataplane packet-diag set filter match source 10.1.1.10\ndebug dataplane packet-diag set filter on\ndebug dataplane packet-diag set capture stage receive file rx.pcap\ndebug dataplane packet-diag set capture on',f:"diagnose sniffer packet any 'host 10.1.1.10' 4",y:null},1],
+['diag','パケットキャプチャを停止','',{c:'monitor capture CAP stop',j:null,p:null,f:null,y:null}],
+['diag','IP SLA / 監視プローブの結果','',{c:'show ip sla statistics',j:'show services rpm probe-results',p:'show routing path-monitor',f:'diagnose sys link-monitor status',y:null}],
+['diag','ICMP の debug','終わったら undebug all',{c:'debug ip icmp',j:null,p:null,f:'diagnose debug flow filter proto 1\ndiagnose debug flow trace start 10\ndiagnose debug enable',y:null}],
+
+// ---------------- クリア・リセット ----------------
+['clr','インターフェースのカウンタをクリア','障害切り分けの前にゼロにしてから増え方を見る',{c:'clear counters Gi0/1',j:'clear interfaces statistics ge-0/0/1',p:'clear counter interface',f:null,y:null},1],
+['clr','全インターフェースのカウンタをクリア','',{c:'clear counters',j:'clear interfaces statistics all',p:'clear counter all',f:null,y:null},1],
+['clr','パケット破棄カウンタをクリア','',{c:null,j:'clear security flow statistics',p:'clear counter global',f:null,y:null}],
+['clr','ACL / ポリシーのヒット数をクリア','',{c:'clear access-list counters',j:'clear firewall all',p:null,f:'diagnose firewall iprope clear 100004 <ポリシーID>',y:null}],
+['clr','ARP テーブルをクリア','',{c:'clear arp-cache',j:'clear arp',p:'clear arp all',f:'execute clear system arp table',y:'clear arp'},1],
+['clr','MAC アドレステーブルをクリア','',{c:'clear mac address-table dynamic',j:'clear ethernet-switching table',p:'clear mac all',f:null,y:null}],
+['clr','ルーティングテーブルを再計算','',{c:'clear ip route *',j:null,p:null,f:'execute router restart',y:null}],
+['clr','OSPF を再起動','ネイバーが張り直しになるので注意',{c:'clear ip ospf process',j:'clear ospf neighbor',p:null,f:'execute router clear ospf process',y:null}],
+['clr','BGP をソフトリセット','ピアを切らずにポリシーを再適用',{c:'clear ip bgp * soft',j:'clear bgp neighbor soft',p:null,f:'execute router clear bgp all soft',y:null}],
+['clr','BGP ピアをハードリセット','ピアが切断される',{c:'clear ip bgp 192.0.2.1',j:'clear bgp neighbor 192.0.2.1',p:null,f:'execute router clear bgp ip 192.0.2.1',y:null}],
+['clr','セッションをクリア（特定 IP）','FortiGate はフィルタ未設定だと全セッションが消えるので注意',{c:null,j:'clear security flow session source-prefix 10.1.1.10',p:'clear session all filter source 10.1.1.10',f:'diagnose sys session filter src 10.1.1.10\ndiagnose sys session clear',y:null},1],
+['clr','全セッションをクリア','全通信が切れる。最終手段',{c:null,j:'clear security flow session all',p:'clear session all',f:'diagnose sys session filter clear\ndiagnose sys session clear',y:null}],
+['clr','NAT 変換をクリア','',{c:'clear ip nat translation *',j:'clear security flow session all',p:'clear session all',f:'diagnose sys session clear',y:'clear nat descriptor dynamic all'}],
+['clr','IKE SA をクリア（VPN 再接続）','',{c:'clear crypto isakmp\nclear crypto ikev2 sa',j:'clear security ike security-associations',p:'clear vpn ike-sa gateway <GW名>',f:'diagnose vpn ike gateway clear name <フェーズ1名>',y:'ipsec refresh sa'},1],
+['clr','IPsec SA をクリア','',{c:'clear crypto sa',j:'clear security ipsec security-associations',p:'clear vpn ipsec-sa tunnel <トンネル名>',f:'diagnose vpn tunnel down <フェーズ2名>',y:'ipsec refresh sa'},1],
+['clr','VPN セッションをまとめてクリア','',{c:'clear crypto session',j:null,p:null,f:'diagnose vpn ike gateway clear',y:null}],
+['clr','DHCP の払い出しをクリア','',{c:'clear ip dhcp binding *',j:'clear dhcp server binding all',p:null,f:'execute dhcp lease-clear',y:null}],
+['clr','ログをクリア','',{c:'clear logging',j:'clear log messages',p:null,f:'execute log delete-all',y:'clear log'}],
+['clr','PPPoE を切断・再接続','',{c:'clear pppoe all',j:'clear pppoe sessions',p:null,f:'execute interface pppoe-reconnect <IF名>',y:'disconnect 1\nconnect 1'}],
+['clr','STP の検出プロトコルをリセット','',{c:'clear spanning-tree detected-protocols',j:null,p:null,f:null,y:null}],
+];
+
+</script>
+<script>
+const APP_VERSION = '1.1.0';
+'use strict';
+/* ================= 共通 ================= */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtN = n => (typeof n === 'bigint' ? n : Number(n)).toLocaleString('en-US');
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('netkit.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('netkit.' + k, JSON.stringify(v)); } catch (e) { } }
+};
+
+let toastT;
+function toast(m) {
+  const t = $('#toast'); t.textContent = m; t.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 1600);
+}
+async function copyText(s) {
+  const label = s.includes('\n') ? `${s.split('\n').length}行をコピーしました` : 'コピー: ' + (s.length > 42 ? s.slice(0, 42) + '…' : s);
+  try { await navigator.clipboard.writeText(s); toast(label); return; } catch (e) { }
+  try {
+    const ta = document.createElement('textarea'); ta.value = s; ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'; document.body.appendChild(ta);
+    ta.select(); ta.setSelectionRange(0, s.length);
+    const ok = document.execCommand('copy'); ta.remove();
+    toast(ok ? label : 'コピーできませんでした');
+  } catch (e) { toast('コピーできませんでした'); }
+}
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-copy]');
+  if (el) copyText(el.dataset.copy);
+});
+
+// kv 行: {k, v, copy, cls, note, plain, html}
+function kv(rows) {
+  return rows.filter(Boolean).map(r => {
+    const copy = r.plain ? '' : ` data-copy="${esc(r.copy ?? r.v)}"`;
+    const body = r.html ?? esc(r.v);
+    const note = r.note ? `<small>${esc(r.note)}</small>` : '';
+    const w = r.wide ? ' wide' : '';
+    return `<div class="k${w}">${esc(r.k)}</div><div class="v ${r.cls || ''}${r.plain ? ' plain' : ''}${w}"${copy}>${body}${note}</div>`;
+  }).join('');
+}
+const msg = (type, text) => text ? `<div class="msg ${type}">${text}</div>` : '';
+const badge = (t, c = '') => `<span class="badge ${c}">${esc(t)}</span>`;
+
+/* ================= IPv4 ================= */
+function parseIPv4(s) {
+  const m = String(s).trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return null;
+  let n = 0;
+  for (let i = 1; i <= 4; i++) { const o = +m[i]; if (o > 255) return null; n = n * 256 + o; }
+  return n >>> 0;
+}
+const ip4 = n => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+const pfxMask = p => p <= 0 ? 0 : (0xFFFFFFFF << (32 - p)) >>> 0;
+function maskPfx(m) { // 連続マスクならプレフィックス長、不連続なら -1
+  let p = 0, zero = false;
+  for (let i = 31; i >= 0; i--) { if ((m >>> i) & 1) { if (zero) return -1; p++; } else zero = true; }
+  return p;
+}
+function popcnt(n) { let c = 0; n >>>= 0; while (n) { c += n & 1; n >>>= 1; } return c; }
+const bits32 = n => (n >>> 0).toString(2).padStart(32, '0');
+const hex32 = n => '0x' + (n >>> 0).toString(16).toUpperCase().padStart(8, '0');
+function inRange4(ip, base, p) { const m = pfxMask(p); return ((ip & m) >>> 0) === ((base & m) >>> 0); }
+
+const V4_SPECIAL = [
+  ['0.0.0.0', 8, '“このネットワーク”（RFC 1122）', 'warn'],
+  ['10.0.0.0', 8, 'プライベート（RFC 1918）', 'acc'],
+  ['100.64.0.0', 10, 'CGNAT 共有アドレス（RFC 6598）', 'warn'],
+  ['127.0.0.0', 8, 'ループバック', 'warn'],
+  ['169.254.0.0', 16, 'リンクローカル / APIPA', 'warn'],
+  ['172.16.0.0', 12, 'プライベート（RFC 1918）', 'acc'],
+  ['192.0.0.0', 24, 'IETF プロトコル割当', 'warn'],
+  ['192.0.2.0', 24, 'ドキュメント用 TEST-NET-1', 'warn'],
+  ['192.88.99.0', 24, '6to4 リレー（廃止）', 'warn'],
+  ['192.168.0.0', 16, 'プライベート（RFC 1918）', 'acc'],
+  ['198.18.0.0', 15, 'ベンチマーク用（RFC 2544）', 'warn'],
+  ['198.51.100.0', 24, 'ドキュメント用 TEST-NET-2', 'warn'],
+  ['203.0.113.0', 24, 'ドキュメント用 TEST-NET-3', 'warn'],
+  ['224.0.0.0', 4, 'マルチキャスト', 'host'],
+  ['255.255.255.255', 32, '限定ブロードキャスト', 'warn'],
+  ['240.0.0.0', 4, '予約（クラスE）', 'bad'],
+].map(([a, p, t, c]) => [parseIPv4(a), p, t, c]);
+function v4Type(ip) {
+  for (const [b, p, t, c] of V4_SPECIAL) if (inRange4(ip, b, p)) return [t, c];
+  return ['グローバル', 'host'];
+}
+function v4Class(ip) {
+  const o = ip >>> 24;
+  if (o < 128) return 'A（既定 /8）'; if (o < 192) return 'B（既定 /16）'; if (o < 224) return 'C（既定 /24）';
+  if (o < 240) return 'D（マルチキャスト）'; return 'E（予約）';
+}
+
+/* ================= IPv6 ================= */
+const ALL128 = (1n << 128n) - 1n;
+function parseIPv6(s) {
+  s = String(s).trim().replace(/^\[|\]$/g, '');
+  const zi = s.indexOf('%'); if (zi >= 0) s = s.slice(0, zi);
+  if (!/^[0-9a-fA-F:.]+$/.test(s) || !s.includes(':')) return null;
+  if (s.includes('.')) {
+    const lc = s.lastIndexOf(':'); const v4 = parseIPv4(s.slice(lc + 1)); if (v4 === null) return null;
+    s = s.slice(0, lc + 1) + (v4 >>> 16).toString(16) + ':' + (v4 & 0xffff).toString(16);
+  }
+  const dbl = s.split('::'); if (dbl.length > 2) return null;
+  const head = dbl[0] ? dbl[0].split(':') : [];
+  const tail = dbl.length === 2 && dbl[1] ? dbl[1].split(':') : [];
+  if (dbl.length === 1 && head.length !== 8) return null;
+  if (dbl.length === 2 && head.length + tail.length > 7) return null;
+  const groups = [...head, ...Array(dbl.length === 2 ? 8 - head.length - tail.length : 0).fill('0'), ...tail];
+  let n = 0n;
+  for (const g of groups) { if (!/^[0-9a-fA-F]{1,4}$/.test(g)) return null; n = (n << 16n) | BigInt(parseInt(g, 16)); }
+  return n;
+}
+function v6Groups(n) { const g = []; for (let i = 7; i >= 0; i--) g.push(Number((n >> BigInt(i * 16)) & 0xffffn)); return g; }
+function v6Full(n) { return v6Groups(n).map(x => x.toString(16).padStart(4, '0')).join(':'); }
+function v6(n) { // RFC 5952 形式
+  const g = v6Groups(n);
+  let bs = -1, bl = 0, cs = -1, cl = 0;
+  for (let i = 0; i < 8; i++) {
+    if (g[i] === 0) { if (cs < 0) { cs = i; cl = 1; } else cl++; if (cl > bl) { bl = cl; bs = cs; } }
+    else { cs = -1; cl = 0; }
+  }
+  const h = g.map(x => x.toString(16));
+  if (bl < 2) return h.join(':');
+  return h.slice(0, bs).join(':') + '::' + h.slice(bs + bl).join(':');
+}
+const v6Mask = p => p <= 0 ? 0n : (ALL128 ^ ((1n << BigInt(128 - p)) - 1n));
+function v6In(a, base, p) { const m = v6Mask(p); return (a & m) === (base & m); }
+const V6_SPECIAL = [
+  ['::', 128, '未指定アドレス', 'warn'], ['::1', 128, 'ループバック', 'warn'],
+  ['::ffff:0:0', 96, 'IPv4 射影アドレス', 'warn'], ['64:ff9b::', 96, 'NAT64（RFC 6052）', 'warn'],
+  ['2001::', 32, 'Teredo', 'warn'], ['2001:db8::', 32, 'ドキュメント用', 'warn'], ['2002::', 16, '6to4', 'warn'],
+  ['fc00::', 7, 'ユニークローカル（ULA）', 'acc'], ['fe80::', 10, 'リンクローカル', 'warn'],
+  ['ff00::', 8, 'マルチキャスト', 'host'], ['2000::', 3, 'グローバルユニキャスト', 'host'],
+].map(([a, p, t, c]) => [parseIPv6(a), p, t, c]);
+function v6Type(a) { for (const [b, p, t, c] of V6_SPECIAL) if (v6In(a, b, p)) return [t, c]; return ['予約 / 未割当', 'bad']; }
+function bigPow2(e) { // 2^e を読みやすく
+  if (e <= 64) return fmtN(1n << BigInt(e));
+  const v = Math.pow(2, e); return `2^${e}（約 ${v.toExponential(2).replace('e+', ' × 10^')}）`;
+}
+
+/* ================= サブネット計算 ================= */
+const sn = { kind: 4, ip: null, p: 26, net: 0, rows: [] };
+
+function parseSubnetInput(raw) {
+  const s = raw.trim();
+  if (!s) return { err: '' };
+  const parts = s.split(/\s*\/\s*|\s+/).filter(Boolean);
+  if (parts.length > 2) return { err: '形式が読み取れません。「アドレス/プレフィックス」または「アドレス マスク」で入力してください。' };
+  // IPv6
+  if (parts[0].includes(':')) {
+    const a = parseIPv6(parts[0]); if (a === null) return { err: 'IPv6 アドレスの形式が正しくありません。' };
+    let p = parts[1] === undefined ? null : (/^\d{1,3}$/.test(parts[1]) ? +parts[1] : NaN);
+    if (Number.isNaN(p) || p > 128) return { err: 'IPv6 のプレフィックス長は 0〜128 で指定してください。' };
+    return { kind: 6, ip: a, p, given: p !== null };
+  }
+  const ip = parseIPv4(parts[0]);
+  if (ip === null) return { err: 'IPv4 アドレスの形式が正しくありません（例: 192.168.1.10/24）。' };
+  if (parts[1] === undefined) return { kind: 4, ip, p: null, given: false };
+  if (/^\d{1,2}$/.test(parts[1])) {
+    const p = +parts[1]; if (p > 32) return { err: 'IPv4 のプレフィックス長は 0〜32 です。' };
+    return { kind: 4, ip, p, given: true };
+  }
+  const m = parseIPv4(parts[1]);
+  if (m === null) return { err: 'マスクの形式が正しくありません。' };
+  const p = maskPfx(m);
+  if (p >= 0) return { kind: 4, ip, p, given: true };
+  const wp = maskPfx((~m) >>> 0);
+  if (wp >= 0) return { kind: 4, ip, p: wp, given: true, note: `${ip4(m)} はワイルドカードとして解釈しました（= /${wp}）。` };
+  return { err: `${ip4(m)} は連続したサブネットマスクではありません。不連続ワイルドカードは「ワイルドカード」タブで確認できます。` };
+}
+
+function calcSubnet() {
+  const inp = $('#sn-in'), r = parseSubnetInput(inp.value);
+  inp.classList.toggle('err', !!r.err);
+  if (r.err !== undefined) {
+    $('#sn-msg').innerHTML = msg('err', esc(r.err));
+    if (r.err) { $('#sn-res').innerHTML = ''; $('#sn-bin').innerHTML = ''; $('#sn-type').innerHTML = ''; $('#sn-split-t').innerHTML = ''; $('#sn-split-info').textContent = ''; }
+    return;
+  }
+  const slider = $('#sn-pr');
+  const max = r.kind === 6 ? 128 : 32;
+  if (+slider.max !== max) { slider.max = max; }
+  let p = r.p;
+  if (p === null) p = Math.min(+slider.value, max) || (r.kind === 6 ? 64 : 24);
+  if (r.kind === 6 && !r.given && sn.kind === 4) p = 64;
+  if (r.kind === 4 && !r.given && sn.kind === 6) p = 24;
+  slider.value = p; $('#sn-pb').textContent = '/' + p;
+  sn.kind = r.kind; sn.ip = r.ip; sn.p = p;
+  let note = r.note ? msg('info', esc(r.note)) : '';
+  if (!r.given) note += msg('info', `プレフィックス未指定のため /${p} で計算しています（スライダーで変更できます）。`);
+  $('#sn-msg').innerHTML = note;
+  if (r.kind === 4) renderV4(r.ip, p); else renderV6(r.ip, p);
+  buildSplitOptions(); renderSplit(); renderHostCheck(); renderRef();
+}
+
+function renderV4(ip, p) {
+  const mask = pfxMask(p), wc = (~mask) >>> 0, net = (ip & mask) >>> 0, bc = (net | wc) >>> 0;
+  const total = 2 ** (32 - p);
+  let first, last, hosts, bcText;
+  if (p === 32) { first = last = ip; hosts = 1; }
+  else if (p === 31) { first = net; last = bc; hosts = 2; }
+  else { first = net + 1; last = bc - 1; hosts = total - 2; }
+  sn.net = net;
+  const [tName, tCls] = v4Type(ip);
+  $('#sn-type').innerHTML = badge('IPv4', 'acc') + ' ' + badge(tName, tCls) + (ip === net && p < 31 ? ' ' + badge('ネットワークアドレス', 'warn') : '') + (ip === bc && p < 31 ? ' ' + badge('ブロードキャスト', 'warn') : '');
+  const next = bc < 0xFFFFFFFF ? `${ip4((bc + 1) >>> 0)}/${p}` : '—';
+  const prev = net > 0 ? `${ip4((net - total) >>> 0)}/${p}` : '—';
+  $('#sn-res').innerHTML = kv([
+    { k: 'ネットワーク', v: `${ip4(net)}/${p}`, cls: 'big acc' },
+    p >= 31 ? { k: 'ブロードキャスト', v: 'なし', note: p === 31 ? '/31 は P2P 用（RFC 3021）' : 'ホストルート', plain: true }
+      : { k: 'ブロードキャスト', v: ip4(bc) },
+    { k: '使用可能範囲', v: `${ip4(first)} – ${ip4(last)}` },
+    { k: '使用可能ホスト数', v: fmtN(hosts), note: p < 31 ? `総数 ${fmtN(total)}` : '' },
+    { k: 'サブネットマスク', v: ip4(mask) },
+    { k: 'ワイルドカード', v: ip4(wc) },
+    { k: 'プレフィックス', v: '/' + p },
+    { k: '入力アドレス', v: ip4(ip), note: v4Class(ip) },
+    { k: '16進 / 整数', v: `${hex32(ip)} / ${ip}` },
+    { k: 'PTR 名', v: ip4(ip).split('.').reverse().join('.') + '.in-addr.arpa' },
+    { k: '前 / 次のサブネット', v: `${prev} ← → ${next}` },
+  ]);
+  const line = (lbl, n) => {
+    const b = bits32(n); let h = `<span class="lbl">${lbl}</span>`;
+    for (let i = 0; i < 32; i++) { if (i && i % 8 === 0) h += '<span class="d">.</span>'; h += `<span class="${i < p ? 'n' : 'h'}">${b[i]}</span>`; }
+    return `<div data-copy="${b.match(/.{8}/g).join('.')}" class="copyable">${h}</div>`;
+  };
+  $('#sn-bincard').classList.remove('hide');
+  $('#sn-bin').innerHTML = line('アドレス', ip) + line('マスク', mask) + line('ネットワーク', net) + line('ブロードキャスト', bc);
+}
+
+function renderV6(a, p) {
+  const m = v6Mask(p), net = a & m, last = net | (ALL128 ^ m);
+  sn.net = net;
+  const [tName, tCls] = v6Type(a);
+  $('#sn-type').innerHTML = badge('IPv6', 'acc') + ' ' + badge(tName, tCls);
+  const rows = [
+    { k: 'ネットワーク', v: `${v6(net)}/${p}`, cls: 'big acc' },
+    { k: '範囲（先頭）', v: v6(net) },
+    { k: '範囲（末尾）', v: v6(last) },
+    { k: 'アドレス数', v: bigPow2(128 - p), copy: (1n << BigInt(128 - p)).toString() },
+    p <= 64 ? { k: '/64 の数', v: bigPow2(64 - p), copy: (1n << BigInt(64 - p)).toString(), note: 'LAN 1セグメント = /64' } : null,
+    { k: '入力（短縮）', v: v6(a) },
+    { k: '入力（完全表記）', wide: true, v: v6Full(a) },
+    { k: 'プレフィックスマスク', v: v6(m) },
+    { k: 'PTR 名', wide: true, v: v6Full(a).replace(/:/g, '').split('').reverse().join('.') + '.ip6.arpa' },
+  ];
+  if (v6In(a, parseIPv6('::ffff:0:0'), 96)) rows.push({ k: '埋め込み IPv4', v: ip4(Number(a & 0xffffffffn)) });
+  const iid = a & 0xffffffffffffffffn;
+  if (((iid >> 24n) & 0xffffn) === 0xfffen) {
+    const b = []; for (let i = 7; i >= 0; i--) b.push(Number((iid >> BigInt(i * 8)) & 0xffn));
+    const mac = [b[0] ^ 2, b[1], b[2], b[5], b[6], b[7]].map(x => x.toString(16).padStart(2, '0')).join(':');
+    rows.push({ k: 'EUI-64 由来 MAC', v: mac, note: vendorOf(mac.replace(/:/g, '').toUpperCase())?.name || '' });
+  }
+  $('#sn-res').innerHTML = kv(rows);
+  $('#sn-bincard').classList.add('hide');
+}
+
+function buildSplitOptions() {
+  const sel = $('#sn-split'), max = sn.kind === 6 ? 128 : 32, prev = +sel.value;
+  const lo = sn.p + 1, hi = Math.min(sn.p + 16, max);
+  let html = '';
+  for (let t = lo; t <= hi; t++) {
+    const cnt = 2 ** (t - sn.p);
+    const hostTxt = sn.kind === 4 ? `、各 ${fmtN(t >= 31 ? 2 ** (32 - t) : 2 ** (32 - t) - 2)} ホスト` : '';
+    html += `<option value="${t}">/${t}（${fmtN(cnt)} 分割${hostTxt}）</option>`;
+  }
+  sel.innerHTML = html || '<option value="">これ以上分割できません</option>';
+  if (prev >= lo && prev <= hi) sel.value = prev;
+  else if (sn.kind === 6 && sn.p < 64 && 64 <= hi) sel.value = 64;
+}
+
+function splitList(limit) {
+  const t = +$('#sn-split').value; if (!t) return { t, rows: [], total: 0 };
+  const total = 2 ** (t - sn.p); const n = Math.min(total, limit); const rows = [];
+  if (sn.kind === 4) {
+    const size = 2 ** (32 - t);
+    for (let i = 0; i < n; i++) {
+      const net = sn.net + i * size, bc = net + size - 1;
+      const range = t >= 31 ? `${ip4(net)} – ${ip4(bc)}` : `${ip4(net + 1)} – ${ip4(bc - 1)}`;
+      rows.push({ net: `${ip4(net)}/${t}`, range, bc: t >= 31 ? '—' : ip4(bc), hit: inRange4(sn.ip, net, t) });
+    }
+  } else {
+    const size = 1n << BigInt(128 - t);
+    for (let i = 0; i < n; i++) {
+      const net = sn.net + BigInt(i) * size;
+      rows.push({ net: `${v6(net)}/${t}`, range: `${v6(net)} – ${v6(net + size - 1n)}`, bc: '', hit: v6In(sn.ip, net, t) });
+    }
+  }
+  return { t, rows, total };
+}
+function renderSplit() {
+  const tbl = $('#sn-split-t'), info = $('#sn-split-info');
+  const { t, rows, total } = splitList(512);
+  if (!t) { tbl.innerHTML = ''; info.textContent = ''; return; }
+  info.textContent = `${fmtN(total)} 個のサブネット` + (total > rows.length ? `（先頭 ${rows.length} 件を表示。コピーは最大 65,536 件）` : '') + '　緑の行 = 入力アドレスを含むサブネット';
+  const v4 = sn.kind === 4;
+  tbl.innerHTML = `<thead><tr><th>#</th><th>ネットワーク</th><th>${v4 ? '使用可能範囲' : '範囲'}</th>${v4 ? '<th>ブロードキャスト</th>' : ''}</tr></thead><tbody>` +
+    rows.map((r, i) => `<tr class="${r.hit ? 'hl' : ''}" data-copy="${esc(r.net)}"><td>${i + 1}</td><td>${esc(r.net)}</td><td>${esc(r.range)}</td>${v4 ? `<td>${esc(r.bc)}</td>` : ''}</tr>`).join('') + '</tbody>';
+}
+function renderHostCheck() {
+  const c = $('#sn-chk'), v = c.value.trim(), out = $('#sn-chkr');
+  if (!v) { out.innerHTML = ''; c.classList.remove('err'); return; }
+  let ok;
+  if (sn.kind === 4) { const a = parseIPv4(v); if (a === null) { out.innerHTML = msg('err', 'IPv4 アドレスを入力してください'); return; } ok = inRange4(a, sn.ip, sn.p); }
+  else { const a = parseIPv6(v); if (a === null) { out.innerHTML = msg('err', 'IPv6 アドレスを入力してください'); return; } ok = v6In(a, sn.ip, sn.p); }
+  const netTxt = sn.kind === 4 ? `${ip4(sn.net)}/${sn.p}` : `${v6(sn.net)}/${sn.p}`;
+  out.innerHTML = ok ? msg('ok', `✓ ${esc(v)} は ${netTxt} に含まれます`) : msg('err', `✕ ${esc(v)} は ${netTxt} に含まれません`);
+}
+function renderHostsNeeded() {
+  const v = $('#sn-hosts').value.trim(), out = $('#sn-hr');
+  if (!v) { out.innerHTML = ''; return; }
+  const n = Number(v.replace(/[,，]/g, ''));
+  if (!Number.isInteger(n) || n < 1 || n > 4294967294) { out.innerHTML = msg('err', '1〜4,294,967,294 の整数を入力してください'); return; }
+  let p;
+  if (n === 1) p = 32; else if (n === 2) p = 30; else p = 32 - Math.ceil(Math.log2(n + 2));
+  while (p < 32 && (2 ** (32 - p) - 2) < n) p--;
+  const usable = p >= 31 ? 2 ** (32 - p) : 2 ** (32 - p) - 2;
+  let h = msg('ok', `/${p}（${ip4(pfxMask(p))}）… 使用可能 ${fmtN(usable)} ホスト`);
+  if (n === 2) h += msg('info', 'ルータ間のポイントツーポイントなら /31（RFC 3021）も使えます。');
+  out.innerHTML = h;
+}
+function renderRef() {
+  const t = $('#sn-ref'); if (!$('#sn-refbox').open) return;
+  let h = '<thead><tr><th>プレフィックス</th><th>サブネットマスク</th><th>ワイルドカード</th><th>アドレス数</th><th>ホスト数</th></tr></thead><tbody>';
+  for (let p = 8; p <= 32; p++) {
+    const m = pfxMask(p), tot = 2 ** (32 - p), hosts = p === 32 ? 1 : p === 31 ? 2 : tot - 2;
+    h += `<tr class="${sn.kind === 4 && sn.p === p ? 'hl' : ''}" data-copy="${ip4(m)}"><td>/${p}</td><td>${ip4(m)}</td><td>${ip4((~m) >>> 0)}</td><td>${fmtN(tot)}</td><td>${fmtN(hosts)}</td></tr>`;
+  }
+  t.innerHTML = h + '</tbody>';
+}
+
+function initSubnet() {
+  const inp = $('#sn-in'); inp.value = store.get('sn', inp.value);
+  inp.addEventListener('input', () => { store.set('sn', inp.value); calcSubnet(); });
+  $('#sn-pr').addEventListener('input', e => {
+    const p = +e.target.value; const base = inp.value.trim().split(/\s*\/\s*|\s+/)[0] || (sn.kind === 6 ? '2001:db8::' : '192.168.0.0');
+    inp.value = `${base}/${p}`; store.set('sn', inp.value); calcSubnet();
+  });
+  $('#sn-split').addEventListener('change', renderSplit);
+  $('#sn-chk').addEventListener('input', renderHostCheck);
+  $('#sn-hosts').addEventListener('input', renderHostsNeeded);
+  $('#sn-refbox').addEventListener('toggle', renderRef);
+  $('#sn-split-copy').addEventListener('click', () => {
+    const { rows } = splitList(65536); if (!rows.length) return;
+    copyText(rows.map(r => [r.net, r.range, r.bc].filter(Boolean).join('\t')).join('\n'));
+  });
+  calcSubnet();
+}
+
+/* ================= ワイルドカード ================= */
+let wcMode = 'auto';
+function wcRender() {
+  const inp = $('#wc-in'), s = inp.value.trim(), out = $('#wc-res'), m = $('#wc-msg');
+  out.innerHTML = ''; m.innerHTML = ''; inp.classList.remove('err');
+  if (!s) return;
+  let p = null, nonc = null, note = '';
+  if (/^\/?\d{1,2}$/.test(s)) {
+    p = +s.replace('/', ''); if (p > 32) { inp.classList.add('err'); m.innerHTML = msg('err', 'プレフィックスは 0〜32 です'); return; }
+    note = 'プレフィックス長として解釈';
+  } else {
+    const v = parseIPv4(s);
+    if (v === null) { inp.classList.add('err'); m.innerHTML = msg('err', '「255.255.255.0」「0.0.0.255」「/24」のいずれかの形式で入力してください'); return; }
+    const am = maskPfx(v), aw = maskPfx((~v) >>> 0);
+    if (wcMode === 'mask') {
+      if (am < 0) { inp.classList.add('err'); m.innerHTML = msg('err', '連続したサブネットマスクではありません'); return; }
+      p = am; note = 'サブネットマスクとして解釈';
+    } else if (wcMode === 'wild') {
+      if (aw >= 0) { p = aw; note = 'ワイルドカードとして解釈'; } else { nonc = v; note = '不連続ワイルドカード（ACL専用）として解釈'; }
+    } else {
+      if (am >= 0 && aw >= 0) { // 0.0.0.0 と 255.255.255.255 はどちらにも読める → どちらも /32 として扱う
+        p = 32;
+        note = v === 0 ? '0.0.0.0 はワイルドカード（= host、/32）として解釈。マスクの /0 の意味なら「マスク」を選択'
+          : '255.255.255.255 はマスク（/32）として解釈。ワイルドカード（= any）の意味なら「ワイルドカード」を選択';
+      }
+      else if (am >= 0) { p = am; note = 'サブネットマスクとして解釈'; }
+      else if (aw >= 0) { p = aw; note = 'ワイルドカードとして解釈'; }
+      else { nonc = v; note = '不連続ワイルドカード（ACL専用）として解釈'; }
+    }
+  }
+  m.innerHTML = msg('info', esc(note));
+  if (nonc === null) {
+    const mask = pfxMask(p), wc = (~mask) >>> 0, tot = 2 ** (32 - p);
+    out.innerHTML = kv([
+      { k: 'プレフィックス', v: '/' + p, cls: 'big acc' },
+      { k: 'サブネットマスク', v: ip4(mask), cls: 'big' },
+      { k: 'ワイルドカード', v: ip4(wc), cls: 'big' },
+      { k: 'アドレス数', v: fmtN(tot), note: `使用可能 ${fmtN(p === 32 ? 1 : p === 31 ? 2 : tot - 2)} ホスト` },
+      { k: 'マスク（2進）', wide: true, v: bits32(mask).match(/.{8}/g).join('.') },
+      { k: 'WC（2進）', wide: true, v: bits32(wc).match(/.{8}/g).join('.') },
+    ]);
+  } else {
+    out.innerHTML = kv([
+      { k: 'ワイルドカード', v: ip4(nonc), cls: 'big acc' },
+      { k: '一致パターン数', v: fmtN(2 ** popcnt(nonc)), note: `ワイルドカードの 1 のビット = ${popcnt(nonc)} 個` },
+      { k: '対応するマスク', v: 'なし（不連続のため CIDR 表記不可）', plain: true },
+      { k: 'WC（2進）', wide: true, v: bits32(nonc).match(/.{8}/g).join('.') },
+    ]) + `<div style="padding-top:10px"><button class="btn sm" id="wc-to-acl">ACL 一致チェックで範囲を見る</button></div>`;
+    $('#wc-to-acl').onclick = () => { $('#acl-wc').value = ip4(nonc); aclRender(); $('#acl-wc').scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+  }
+}
+
+function parseWildField(s) {
+  s = s.trim();
+  if (/^\/?\d{1,2}$/.test(s)) { const p = +s.replace('/', ''); if (p > 32) return null; return (~pfxMask(p)) >>> 0; }
+  return parseIPv4(s);
+}
+function octetCond(bo, wo) {
+  if (wo === 0) return `${bo}（固定）`;
+  if (wo === 255) return '任意（0〜255）';
+  if (((wo + 1) & wo) === 0) return `${bo}〜${bo + wo}（${wo + 1}通り）`;
+  if (wo === 254) return bo & 1 ? '奇数のみ（128通り）' : '偶数のみ（128通り）';
+  const vals = []; const care = (~wo) & 255;
+  for (let v = 0; v < 256; v++) if ((v & care) === bo) vals.push(v);
+  return vals.length <= 12 ? `${vals.join(', ')}（${vals.length}通り）` : `${vals.slice(0, 8).join(', ')} …（${vals.length}通り）`;
+}
+function aclRender() {
+  const ai = $('#acl-addr'), wi = $('#acl-wc');
+  const addr = parseIPv4(ai.value), wc = parseWildField(wi.value);
+  ai.classList.toggle('err', addr === null && ai.value.trim() !== '');
+  wi.classList.toggle('err', wc === null && wi.value.trim() !== '');
+  const res = $('#acl-res'), m = $('#acl-msg'), cfg = $('#acl-cfg');
+  if (addr === null || wc === null) { res.innerHTML = ''; cfg.textContent = ''; cfg.dataset.copy = ''; m.innerHTML = (ai.value.trim() && wi.value.trim()) ? msg('err', 'アドレスとワイルドカードを正しく入力してください') : ''; $('#acl-tr').innerHTML = ''; return; }
+  const care = (~wc) >>> 0, base = (addr & care) >>> 0, last = (base | wc) >>> 0;
+  const cp = maskPfx(care);
+  let warn = '';
+  if (base !== addr) warn = msg('warn', `アドレスにワイルドカード部分のビットが含まれています。機器上は <b>${ip4(base)}</b> として扱われます。`);
+  m.innerHTML = warn;
+  const oc = []; for (let i = 0; i < 4; i++) oc.push(octetCond((base >>> (24 - 8 * i)) & 255, (wc >>> (24 - 8 * i)) & 255));
+  res.innerHTML = kv([
+    { k: '一致する範囲', v: `${ip4(base)} – ${ip4(last)}`, note: cp < 0 ? '（この範囲内で飛び飛びに一致）' : '' },
+    { k: '一致アドレス数', v: fmtN(2 ** popcnt(wc)) },
+    { k: '等価な CIDR', v: cp >= 0 ? `${ip4(base)}/${cp}` : '—（不連続ワイルドカード）', plain: cp < 0 },
+    { k: 'オクテット別条件', html: oc.map((c, i) => `<div>第${i + 1}: ${esc(c)}</div>`).join(''), v: oc.join(' / '), copy: oc.join(' . ') },
+  ]);
+  const w = ip4(wc), b = ip4(base);
+  const src = wc === 0 ? `host ${b}` : wc === 0xFFFFFFFF ? 'any' : `${b} ${w}`;
+  const lines = [
+    `! 標準ACL`, `access-list 10 permit ${src}`, ``,
+    `! 名前付き拡張ACL`, `ip access-list extended NAME`, ` permit ip ${src} any`, ``,
+    `! OSPF`, `router ospf 1`, ` network ${b} ${w} area 0`,
+  ];
+  if (cp >= 0) lines.push('', `! 等価なCIDR: ${b}/${cp}（マスク ${ip4(care)}）`);
+  cfg.textContent = lines.join('\n'); cfg.dataset.copy = lines.filter(l => !l.startsWith('!')).join('\n').replace(/\n{2,}/g, '\n').trim();
+  aclTest();
+}
+function aclTest() {
+  const t = $('#acl-test').value.trim(), out = $('#acl-tr');
+  const addr = parseIPv4($('#acl-addr').value), wc = parseWildField($('#acl-wc').value);
+  if (!t || addr === null || wc === null) { out.innerHTML = ''; return; }
+  const ip = parseIPv4(t); if (ip === null) { out.innerHTML = msg('err', 'IPv4 アドレスを入力してください'); return; }
+  const care = (~wc) >>> 0, hit = (((ip ^ addr) & care) >>> 0) === 0;
+  out.innerHTML = hit ? msg('ok', `✓ ${esc(t)} はこのエントリに一致します`) : msg('err', `✕ ${esc(t)} は一致しません`);
+}
+
+function rangeToCidrs(s, e) {
+  const out = [];
+  while (s <= e) {
+    let size = 0; // ブロックのビット数
+    while (size < 32 && (s % 2 ** (size + 1)) === 0 && s + 2 ** (size + 1) - 1 <= e) size++;
+    out.push([s, 32 - size]);
+    s += 2 ** size;
+  }
+  return out;
+}
+function rangeRender() {
+  const si = $('#rg-s'), ei = $('#rg-e'), s = parseIPv4(si.value), e = parseIPv4(ei.value);
+  si.classList.toggle('err', s === null); ei.classList.toggle('err', e === null);
+  const out = $('#rg-out'), info = $('#rg-info'), m = $('#rg-msg');
+  const fmt = $('#rg-fmt').value;
+  $('#rg-aclopt').classList.toggle('hide', !['std', 'ext'].includes(fmt));
+  if (s === null || e === null) { out.textContent = ''; info.textContent = ''; m.innerHTML = msg('err', '開始・終了IPを正しく入力してください'); return; }
+  let a = s, b = e, sw = '';
+  if (a > b) { [a, b] = [b, a]; sw = msg('info', '開始と終了を入れ替えて計算しました。'); }
+  m.innerHTML = sw;
+  const blocks = rangeToCidrs(a, b);
+  const name = $('#rg-name').value.trim() || '10', act = $('#rg-act').value, named = !/^\d+$/.test(name);
+  const lines = [];
+  if (fmt === 'std' && named) lines.push(`ip access-list standard ${name}`);
+  if (fmt === 'ext' && named) lines.push(`ip access-list extended ${name}`);
+  if (fmt === 'ospf') lines.push('router ospf 1');
+  for (const [n, p] of blocks) {
+    const w = ip4((~pfxMask(p)) >>> 0), src = p === 32 ? `host ${ip4(n)}` : `${ip4(n)} ${w}`;
+    switch (fmt) {
+      case 'cidr': lines.push(`${ip4(n)}/${p}`); break;
+      case 'wc': lines.push(`${ip4(n)} ${w}`); break;
+      case 'mask': lines.push(`${ip4(n)} ${ip4(pfxMask(p))}`); break;
+      case 'std': lines.push(named ? ` ${act} ${src}` : `access-list ${name} ${act} ${src}`); break;
+      case 'ext': lines.push(named ? ` ${act} ip ${src} any` : `access-list ${name} ${act} ip ${src} any`); break;
+      case 'ospf': lines.push(` network ${ip4(n)} ${w} area 0`); break;
+    }
+  }
+  info.textContent = `${blocks.length} ブロック ／ 合計 ${fmtN(b - a + 1)} アドレス（${ip4(a)} – ${ip4(b)}）　タップでコピー`;
+  out.textContent = lines.join('\n'); out.dataset.copy = lines.join('\n');
+}
+
+function initWildcard() {
+  $('#wc-in').addEventListener('input', wcRender);
+  $('#wc-mode').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    wcMode = b.dataset.m; $$('#wc-mode button').forEach(x => x.classList.toggle('on', x === b)); wcRender();
+  });
+  ['#acl-addr', '#acl-wc'].forEach(s => $(s).addEventListener('input', aclRender));
+  $('#acl-test').addEventListener('input', aclTest);
+  ['#rg-s', '#rg-e', '#rg-name'].forEach(s => $(s).addEventListener('input', rangeRender));
+  ['#rg-fmt', '#rg-act'].forEach(s => $(s).addEventListener('change', rangeRender));
+  wcRender(); aclRender(); rangeRender();
+}
+
+/* ================= ポート ================= */
+const pt = { proto: 'all', cat: null };
+const PROTO_LABEL = { t: 'TCP', u: 'UDP', b: 'TCP/UDP', s: 'SCTP', ip: 'IPプロトコル' };
+const PORT_IDX = PORTS.map(r => ({ n: r[0], pr: r[1], name: r[2], desc: r[3], cat: r[4], hay: `${r[0]} ${r[2]} ${r[3]} ${PORT_CATS[r[4]] || ''} ${PROTO_LABEL[r[1]]}`.toLowerCase() }));
+function portRangeInfo(n) {
+  if (n < 0 || n > 65535) return msg('err', 'ポート番号は 0〜65535 です');
+  let t;
+  if (n <= 1023) t = 'ウェルノウンポート（0〜1023）';
+  else if (n <= 49151) t = '登録済みポート（1024〜49151）';
+  else t = '動的・プライベートポート（49152〜65535）。Windows の既定エフェメラル範囲と同じ';
+  let extra = '';
+  if (n >= 32768 && n <= 60999) extra = '／Linux の既定エフェメラル範囲（32768〜60999）内';
+  return msg('info', `${n} は ${t}${extra}`);
+}
+function portRender() {
+  let q = $('#pt-q').value.trim().toLowerCase();
+  let proto = pt.proto;
+  const toks = q.split(/\s+/).filter(Boolean).filter(t => {
+    if (t === 'tcp') { proto = 't'; return false; }
+    if (t === 'udp') { proto = 'u'; return false; }
+    return true;
+  });
+  let num = null, rng = null;
+  if (toks.length === 1 && /^\d+$/.test(toks[0])) num = +toks[0];
+  if (toks.length === 1 && /^\d+-\d+$/.test(toks[0])) { const [a, b] = toks[0].split('-').map(Number); rng = [Math.min(a, b), Math.max(a, b)]; }
+  let list = PORT_IDX.filter(r => {
+    if (proto !== 'all') { if (r.pr === 'ip' || r.pr === 's') return false; if (r.pr !== proto && r.pr !== 'b') return false; }
+    if (pt.cat && r.cat !== pt.cat) return false;
+    if (num !== null) return r.n === num;
+    if (rng) return r.n >= rng[0] && r.n <= rng[1] && r.pr !== 'ip';
+    return toks.every(t => r.hay.includes(t));
+  });
+  list.sort((a, b) => (a.pr === 'ip') - (b.pr === 'ip') || a.n - b.n || a.pr.localeCompare(b.pr));
+  $('#pt-range').innerHTML = num !== null ? portRangeInfo(num) : '';
+  $('#pt-count').textContent = list.length ? `${list.length} 件` : (num !== null ? `${num} は収録リストにありません（独自アプリや動的ポートの可能性）` : '該当なし');
+  $('#pt-list').innerHTML = list.slice(0, 400).map(r => {
+    const pb = r.pr === 'ip' ? badge('IPプロトコル番号', 'host') : badge(PROTO_LABEL[r.pr], r.pr === 'u' ? 'warn' : r.pr === 'b' ? 'acc' : '');
+    const copy = r.pr === 'ip' ? `${r.name} (IP protocol ${r.n})` : `${r.n}/${PROTO_LABEL[r.pr].toLowerCase()} ${r.name}`;
+    return `<div class="pi ${r.pr === 'ip' ? 'ip' : ''}" data-copy="${esc(copy)}"><div class="num">${r.n}</div><div><div class="nm">${esc(r.name)} ${pb} ${badge(PORT_CATS[r.cat] || '')}</div><div class="ds">${esc(r.desc)}</div></div></div>`;
+  }).join('');
+}
+function initPorts() {
+  const used = [...new Set(PORTS.map(r => r[4]))];
+  $('#pt-cats').innerHTML = used.map(c => `<button class="chip" data-c="${c}">${esc(PORT_CATS[c])}</button>`).join('');
+  $('#pt-cats').addEventListener('click', e => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    pt.cat = pt.cat === b.dataset.c ? null : b.dataset.c;
+    $$('#pt-cats .chip').forEach(x => x.classList.toggle('on', x.dataset.c === pt.cat)); portRender();
+  });
+  $('#pt-proto').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    pt.proto = b.dataset.p; $$('#pt-proto button').forEach(x => x.classList.toggle('on', x === b)); portRender();
+  });
+  $('#pt-q').addEventListener('input', portRender);
+  portRender();
+}
+
+/* ================= MAC ================= */
+const OUI_BUILTIN = new Map();
+for (const [v, list] of Object.entries(OUI_BUILTIN_SRC)) for (const o of list.split(/\s+/)) if (o) OUI_BUILTIN.set(o, v);
+let OUI_IMPORTED = new Map(); let ouiMeta = null;
+
+function vendorOf(hex12) {
+  for (const len of [9, 7, 6]) { const v = OUI_IMPORTED.get(hex12.slice(0, len)); if (v) return { name: v, src: len === 6 ? 'IEEE MA-L' : len === 7 ? 'IEEE MA-M' : 'IEEE MA-S', len }; }
+  const b = OUI_BUILTIN.get(hex12.slice(0, 6)); if (b) return { name: b, src: '内蔵', len: 6 };
+  return null;
+}
+function specialOf(hex12) { for (const [p, , t] of MAC_SPECIAL) if (hex12.startsWith(p)) return t; return null; }
+
+const MAC_RES = [
+  /^[0-9a-f]{2}([:-])(?:[0-9a-f]{2}\1){4}[0-9a-f]{2}$/i,
+  /^[0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4}$/i,
+  /^[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}$/i,
+  /^[0-9a-f]{6}-[0-9a-f]{6}$/i,
+  /^[0-9a-f]{12}$/i,
+];
+function extractMacs(text) {
+  const found = [], seen = new Set();
+  for (let tok of text.split(/[\s,;|"'()\[\]{}<>=]+/)) {
+    tok = tok.replace(/^[^0-9a-f]+|[^0-9a-f]+$/gi, '');
+    if (!tok) continue;
+    if (MAC_RES.some(r => r.test(tok))) {
+      const h = tok.replace(/[^0-9a-f]/gi, '').toUpperCase();
+      if (!seen.has(h)) { seen.add(h); found.push(h); }
+    }
+  }
+  return found;
+}
+function macFormats(h) {
+  const pairs = h.match(/.{2}/g);
+  return [
+    ['コロン', pairs.join(':')], ['コロン（小文字）', pairs.join(':').toLowerCase()], ['ハイフン（Windows）', pairs.join('-')],
+    ['ドット（Cisco）', h.toLowerCase().match(/.{4}/g).join('.')], ['ハイフン4桁（Huawei/H3C）', h.toLowerCase().match(/.{4}/g).join('-')], ['区切りなし', h],
+  ];
+}
+function eui64LinkLocal(h) {
+  const b = h.match(/.{2}/g).map(x => parseInt(x, 16)); b[0] ^= 2;
+  const iid = [b[0], b[1], b[2], 0xff, 0xfe, b[3], b[4], b[5]];
+  let n = 0xfe80n << 112n;
+  for (let i = 0; i < 8; i++) n |= BigInt(iid[i]) << BigInt((7 - i) * 8);
+  return v6(n);
+}
+function macInfo(h) {
+  const b0 = parseInt(h.slice(0, 2), 16);
+  return { multicast: !!(b0 & 1), local: !!(b0 & 2), special: specialOf(h), vendor: vendorOf(h) };
+}
+function macRender() {
+  const raw = $('#mac-in').value; const out = $('#mac-out');
+  const t = raw.trim();
+  if (!t) { out.innerHTML = ''; return; }
+  // OUI だけの入力
+  const om = t.match(/^([0-9a-f]{2})[:\-.]?([0-9a-f]{2})[:\-.]?([0-9a-f]{2})$/i);
+  if (om) {
+    const o = (om[1] + om[2] + om[3]).toUpperCase(); const v = vendorOf(o + '000000');
+    out.innerHTML = `<div class="card"><h3>OUI 検索 ${badge(o.match(/.{2}/g).join(':'), 'acc')}</h3>` +
+      (v ? `<div class="vend">${esc(v.name)}</div>${badge(v.src)}` : `<div class="vend none">該当なし</div>${noVendorHint()}`) + '</div>';
+    return;
+  }
+  const macs = extractMacs(raw);
+  if (!macs.length) { out.innerHTML = `<div class="card">${msg('err', 'MACアドレスが見つかりません。12桁の16進数（区切りは : - . のいずれか、または無し）で入力してください。')}</div>`; return; }
+  if (macs.length === 1) {
+    const h = macs[0], i = macInfo(h);
+    let vend;
+    if (i.special && !i.vendor) vend = `<div class="vend">${esc(i.special)}</div>${badge('予約アドレス', 'host')}`;
+    else if (i.vendor) vend = `<div class="vend">${esc(i.vendor.name)}</div>${badge(i.vendor.src)}${i.special ? ' ' + badge(i.special, 'host') : ''}`;
+    else if (i.local) vend = `<div class="vend none">ローカル管理アドレス（ベンダー割当なし）</div>`;
+    else vend = `<div class="vend none">ベンダー不明</div>${noVendorHint()}`;
+    const notes = [];
+    if (i.local && !i.multicast) notes.push(msg('warn', 'U/L ビットが 1（ローカル管理）。スマホ・PC の<b>ランダム化（プライベート）MAC</b>、仮想マシン、コンテナなどでよく見られます。'));
+    if (i.multicast) notes.push(msg('info', 'I/G ビットが 1（マルチキャスト / ブロードキャスト）。送信元MACには現れません。'));
+    out.innerHTML = `<div class="card"><h3>ベンダー</h3>${vend}${notes.join('')}</div>
+      <div class="card"><h3>詳細</h3><div class="kv">${kv([
+        { k: 'OUI', v: h.slice(0, 6).match(/.{2}/g).join(':') },
+        { k: '種別', v: `${i.multicast ? 'マルチキャスト' : 'ユニキャスト'} ／ ${i.local ? 'ローカル管理' : 'グローバル（OUI割当）'}`, plain: true },
+        ...macFormats(h).map(([k, v]) => ({ k, v })),
+        !i.multicast ? { k: 'EUI-64 リンクローカル', v: eui64LinkLocal(h) } : null,
+      ])}</div></div>`;
+    return;
+  }
+  // 一括
+  const rows = macs.map(h => { const i = macInfo(h); return { h, i, mac: h.match(/.{2}/g).join(':') }; });
+  const tsv = rows.map(r => `${r.mac}\t${r.i.vendor?.name || r.i.special || (r.i.local ? 'ローカル管理' : '不明')}`).join('\n');
+  const known = rows.filter(r => r.i.vendor || r.i.special).length;
+  out.innerHTML = `<div class="card"><h3>一括検索 ${badge(macs.length + ' 件', 'acc')} ${badge('判明 ' + known, '')}</h3>
+    <div class="row" style="margin-bottom:10px"><div class="hint" style="margin:0">行をタップでMACをコピー</div><div class="nf"><button class="btn sm" data-copy="${esc(tsv)}">結果をコピー（TSV）</button></div></div>
+    <div class="tbl-wrap"><table class="t"><thead><tr><th>MAC</th><th>ベンダー</th><th>メモ</th></tr></thead><tbody>${rows.map(r => {
+      const v = r.i.vendor ? esc(r.i.vendor.name) : r.i.special ? esc(r.i.special) : `<span style="color:var(--tx3)">${r.i.local ? 'ローカル管理' : '不明'}</span>`;
+      const tags = [r.i.local && !r.i.multicast ? badge('ランダム/ローカル', 'warn') : '', r.i.multicast ? badge('マルチキャスト', 'host') : '', r.i.vendor && r.i.special ? badge(r.i.special, 'host') : ''].join(' ');
+      return `<tr data-copy="${r.mac}"><td>${r.mac}</td><td class="s">${v}</td><td class="s">${tags}</td></tr>`;
+    }).join('')}</tbody></table></div>${known < macs.length && !OUI_IMPORTED.size ? noVendorHint() : ''}</div>`;
+}
+function noVendorHint() {
+  return OUI_IMPORTED.size ? '' : msg('info', `内蔵DBは主要ベンダーの抜粋（${fmtN(OUI_BUILTIN.size)} 件）です。「<a href="#setup">オフライン・設定</a>」画面で IEEE の公開リストを取り込むと全ベンダーを検索できます。`);
+}
+function macDbStatus() {
+  const t = OUI_IMPORTED.size ? `ベンダーDB: 内蔵 ${fmtN(OUI_BUILTIN.size)} 件 ＋ 取り込み ${fmtN(OUI_IMPORTED.size)} 件` : `ベンダーDB: 内蔵 ${fmtN(OUI_BUILTIN.size)} 件（主要ベンダー抜粋）。全件を使うには「<a href="#setup">オフライン・設定</a>」画面で取り込み`;
+  $('#mac-db').innerHTML = t;
+  $('#oui-status').innerHTML = OUI_IMPORTED.size
+    ? msg('ok', `取り込み済み: ${fmtN(OUI_IMPORTED.size)} 件（${esc(ouiMeta?.files || '')}、${esc(ouiMeta?.date || '')}）`)
+    : msg('info', `内蔵データのみ（${fmtN(OUI_BUILTIN.size)} 件・主要ベンダーの抜粋）`);
+  $('#about-data').textContent = `ポート ${PORTS.filter(r => r[1] !== 'ip').length} 件 + IPプロトコル番号 ${PORTS.filter(r => r[1] === 'ip').length} 件 ／ OUI 内蔵 ${fmtN(OUI_BUILTIN.size)} 件${OUI_IMPORTED.size ? ` + 取り込み ${fmtN(OUI_IMPORTED.size)} 件` : ''}`;
+}
+
+/* --- OUI 取り込み --- */
+function csvFields(line, max) {
+  const f = []; let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (q) { if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { f.push(cur); cur = ''; if (f.length >= max) return f; }
+    else cur += c;
+  }
+  f.push(cur); return f;
+}
+function parseOuiText(text) {
+  const map = new Map(); const lines = text.split(/\r?\n/);
+  const isCsv = /^\s*Registry\s*,\s*Assignment/i.test(lines[0] || '');
+  for (const line of lines) {
+    if (!line || line[0] === '#') continue;
+    if (isCsv) {
+      const [reg, asg, org] = csvFields(line, 3);
+      if (!asg || !/^[0-9A-F]{6,9}$/i.test(asg.trim()) || !org) continue;
+      map.set(asg.trim().toUpperCase(), org.trim()); continue;
+    }
+    let m = line.match(/^\s*([0-9A-F]{2})-([0-9A-F]{2})-([0-9A-F]{2})\s+\(hex\)\s+(.+?)\s*$/i);
+    if (m) { map.set((m[1] + m[2] + m[3]).toUpperCase(), m[4]); continue; }
+    m = line.match(/^([0-9A-F]{2}(?:[:\-.]?[0-9A-F]{2}){2,5})(?:\/(\d{2}))?\s+(.+)$/i);
+    if (m) {
+      const hex = m[1].replace(/[^0-9A-F]/gi, '').toUpperCase(); const bits = m[2] ? +m[2] : 24;
+      const len = bits === 28 ? 7 : bits === 36 ? 9 : 6;
+      const cols = m[3].split('\t').map(s => s.trim()).filter(Boolean);
+      const name = cols[1] || cols[0]; if (hex.length >= len && name) map.set(hex.slice(0, len), name);
+    }
+  }
+  return map;
+}
+const idb = {
+  open() { return new Promise((res, rej) => { try { const r = indexedDB.open('netkit', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }); },
+  async op(mode, fn) { const db = await this.open(); return new Promise((res, rej) => { const tx = db.transaction('kv', mode); const req = fn(tx.objectStore('kv')); tx.oncomplete = () => res(req && req.result); tx.onerror = () => rej(tx.error); }); },
+  get(k) { return this.op('readonly', s => s.get(k)); },
+  set(k, v) { return this.op('readwrite', s => s.put(v, k)); },
+  del(k) { return this.op('readwrite', s => s.delete(k)); },
+};
+async function importOuiFiles(files) {
+  const out = $('#oui-msg'); out.innerHTML = msg('info', '読み込み中…');
+  let added = 0; const names = [];
+  for (const f of files) {
+    const text = await f.text(); const m = parseOuiText(text);
+    if (!m.size) { out.innerHTML = msg('err', `${esc(f.name)}: OUIデータを読み取れませんでした（IEEE の CSV / TXT、Wireshark manuf に対応）`); continue; }
+    for (const [k, v] of m) OUI_IMPORTED.set(k, v);
+    added += m.size; names.push(f.name);
+  }
+  if (!added) return;
+  ouiMeta = { files: [...new Set([...(ouiMeta?.files ? ouiMeta.files.split('、') : []), ...names])].join('、'), date: new Date().toLocaleDateString('ja-JP') };
+  let saved = true;
+  try { await idb.set('oui', { map: OUI_IMPORTED, meta: ouiMeta }); } catch (e) { saved = false; }
+  out.innerHTML = msg('ok', `${fmtN(added)} 件を取り込みました（合計 ${fmtN(OUI_IMPORTED.size)} 件）。`) + (saved ? '' : msg('warn', 'このブラウザでは保存できなかったため、ページを閉じると消えます。'));
+  macDbStatus(); macRender();
+}
+async function loadOui() {
+  try { const d = await idb.get('oui'); if (d && d.map instanceof Map) { OUI_IMPORTED = d.map; ouiMeta = d.meta; } } catch (e) { }
+  macDbStatus(); macRender();
+}
+function initMac() {
+  const ta = $('#mac-in'); ta.value = store.get('mac', ta.value);
+  ta.addEventListener('input', () => { store.set('mac', ta.value); macRender(); });
+  $('#oui-file').addEventListener('change', e => { if (e.target.files.length) importOuiFiles([...e.target.files]); e.target.value = ''; });
+  const dz = $('#oui-drop');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+  dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); if (e.dataTransfer.files.length) importOuiFiles([...e.dataTransfer.files]); });
+  $('#oui-clear').addEventListener('click', async () => {
+    OUI_IMPORTED = new Map(); ouiMeta = null; try { await idb.del('oui'); } catch (e) { }
+    $('#oui-msg').innerHTML = msg('ok', '取り込みデータを削除しました。'); macDbStatus(); macRender();
+  });
+  $('#oui-links').innerHTML = OUI_SOURCES.map(([n, u]) => `<div><a href="${u}" target="_blank" rel="noopener">${esc(n)}</a><br><code>${esc(u)}</code></div>`).join('');
+  macDbStatus(); macRender(); loadOui();
+}
+
+/* ================= MTU / MSS ================= */
+const MT_DEF = {
+  pppoe:   { n: 'PPPoE', h: [['PPPoE', 6], ['PPP', 2]] },
+  v4in6:   { n: 'IPv4 over IPv6（MAP-E / DS-Lite）', h: [['外側IPv6', 40]] },
+  gre:     { n: 'GRE', h: [['外側IPv4', 20], ['GRE', 4]] },
+  grekey:  { n: 'GRE（キー付き）', h: [['外側IPv4', 20], ['GRE+キー', 8]] },
+  ipip:    { n: 'IP-in-IP / 6in4', h: [['外側IPv4', 20]] },
+  ipsec:   { n: 'IPsec ESP' },
+  mpls:    { n: 'MPLS ラベル', h: [['MPLS', 4]] },
+  vxlan4:  { n: 'VXLAN（IPv4）', h: [['外側IPv4', 20], ['UDP', 8], ['VXLAN', 8], ['内側Ether', 14]] },
+  vxlan6:  { n: 'VXLAN（IPv6）', h: [['外側IPv6', 40], ['UDP', 8], ['VXLAN', 8], ['内側Ether', 14]] },
+  geneve:  { n: 'Geneve（オプションなし）', h: [['外側IPv4', 20], ['UDP', 8], ['Geneve', 8], ['内側Ether', 14]] },
+  wg4:     { n: 'WireGuard（IPv4）', h: [['外側IPv4', 20], ['UDP', 8], ['WG', 16]], t: [['認証タグ', 16]] },
+  wg6:     { n: 'WireGuard（IPv6）', h: [['外側IPv6', 40], ['UDP', 8], ['WG', 16]], t: [['認証タグ', 16]] },
+  custom:  { n: 'カスタム' },
+};
+const ESP_ENC = { 'aes-cbc': { n: 'AES-CBC', iv: 16, blk: 16 }, 'aes-gcm': { n: 'AES-GCM', iv: 8, blk: 4, icv: 16 }, '3des': { n: '3DES', iv: 8, blk: 8 } };
+const ESP_AUTH = { sha1: { n: 'SHA1-96', icv: 12 }, sha256: { n: 'SHA256-128', icv: 16 }, sha384: { n: 'SHA384-192', icv: 24 }, sha512: { n: 'SHA512-256', icv: 32 } };
+const ipsecL = (o = {}) => ({ t: 'ipsec', mode: 'tunnel', enc: 'aes-cbc', auth: 'sha1', natt: false, ...o });
+const MT_PRESETS = [
+  ['フレッツ PPPoE', { base: 1500, layers: [{ t: 'pppoe' }] }],
+  ['IPoE（MAP-E / DS-Lite）', { base: 1500, layers: [{ t: 'v4in6' }] }],
+  ['IPsec（AES-CBC / SHA1）', { base: 1500, layers: [ipsecL()] }],
+  ['IPsec（AES-GCM・NAT-T）', { base: 1500, layers: [ipsecL({ enc: 'aes-gcm', natt: true })] }],
+  ['PPPoE 上の IPsec', { base: 1500, layers: [ipsecL({ auth: 'sha256' }), { t: 'pppoe' }] }],
+  ['GRE over IPsec', { base: 1500, layers: [{ t: 'gre' }, ipsecL({ mode: 'transport' })] }],
+  ['GRE', { base: 1500, layers: [{ t: 'gre' }] }],
+  ['VXLAN', { base: 1500, layers: [{ t: 'vxlan4' }] }],
+  ['WireGuard', { base: 1500, layers: [{ t: 'wg6' }] }],
+  ['MPLS（2ラベル）', { base: 1500, layers: [{ t: 'mpls' }, { t: 'mpls' }] }],
+];
+const mt = Object.assign({ mode: 'fwd', base: 1500, tags: 0, layers: [{ t: 'pppoe' }], vend: 'cisco' }, store.get('mtu', {}));
+
+function wrapLayer(l, P) { // P = 内側サイズ → {total, h, t}
+  if (l.t === 'ipsec') {
+    const e = ESP_ENC[l.enc] || ESP_ENC['aes-cbc'], icv = e.icv || ESP_AUTH[l.auth].icv;
+    const enc = l.mode === 'tunnel' ? P : P - 20;
+    const pad = Math.ceil((enc + 2) / e.blk) * e.blk - enc - 2;
+    const h = []; if (l.mode === 'tunnel') h.push(['外側IPv4', 20]); if (l.natt) h.push(['UDP NAT-T', 8]);
+    h.push(['ESP', 8], ['IV', e.iv]);
+    const t = [['パディング', pad], ['ESPトレーラ', 2], ['ICV', icv]];
+    return { total: P + h.reduce((a, x) => a + x[1], 0) + pad + 2 + icv, h, t };
+  }
+  if (l.t === 'custom') { const n = Math.max(0, Math.min(1000, +l.n || 0)); return { total: P + n, h: [['カスタム', n]], t: [] }; }
+  const d = MT_DEF[l.t]; const h = d.h || [], t = d.t || [];
+  return { total: P + h.reduce((a, x) => a + x[1], 0) + t.reduce((a, x) => a + x[1], 0), h, t };
+}
+function mtOuter(P) { let s = P; const w = []; for (const l of mt.layers) { const r = wrapLayer(l, s); w.push(r); s = r.total; } return { size: s, w }; }
+function mtSolve() {
+  if (mt.mode === 'rev') { const inner = mt.base; const o = mtOuter(inner); return { inner, outer: o.size, w: o.w }; }
+  for (let P = mt.base; P >= 0; P--) { const o = mtOuter(P); if (o.size <= mt.base) return { inner: P, outer: mt.base, w: o.w }; }
+  return null;
+}
+function mtLayersRender() {
+  const box = $('#mt-layers');
+  if (!mt.layers.length) { box.innerHTML = '<div class="layer empty">カプセル化なし（下から追加）</div>'; return; }
+  const n = mt.layers.length;
+  box.innerHTML = mt.layers.map((l, i) => ({ l, i })).reverse().map(({ l, i }) => {
+    let opts = '', bytes = '';
+    if (l.t === 'ipsec') {
+      const sel = (k, map, cur) => `<select data-i="${i}" data-k="${k}">${Object.entries(map).map(([v, o]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${o.n || o}</option>`).join('')}</select>`;
+      opts = `<div class="opts">${sel('mode', { tunnel: 'トンネルモード', transport: 'トランスポートモード' }, l.mode)}${sel('enc', ESP_ENC, l.enc)}${l.enc === 'aes-gcm' ? '' : sel('auth', ESP_AUTH, l.auth)}<label><input type="checkbox" data-i="${i}" data-k="natt"${l.natt ? ' checked' : ''} style="width:auto">NAT-T</label></div>`;
+      bytes = '可変';
+    } else if (l.t === 'custom') {
+      bytes = `<input data-i="${i}" data-k="n" inputmode="numeric" value="${esc(l.n ?? 0)}"> B`;
+    } else bytes = wrapLayer(l, 1000).total - 1000 + ' B';
+    return `<div class="layer"><span class="ln">${esc(MT_DEF[l.t].n)}</span><span class="lb">${bytes}</span><span class="sp"></span>
+      <button class="xbtn" data-mv="${i}" data-d="1" title="外側へ"${i === n - 1 ? ' disabled' : ''}>↑</button><button class="xbtn" data-mv="${i}" data-d="-1" title="内側へ"${i === 0 ? ' disabled' : ''}>↓</button><button class="xbtn" data-rm="${i}" title="削除">✕</button>${opts}</div>`;
+  }).join('');
+}
+function mtRender() {
+  store.set('mtu', mt);
+  $('#mt-base-l').textContent = mt.mode === 'fwd' ? '回線の IP MTU' : '内側で通したい IP MTU';
+  $$('#mt-mode button').forEach(b => b.classList.toggle('on', b.dataset.m === mt.mode));
+  const res = $('#mt-res'), note = $('#mt-note'), stack = $('#mt-stack');
+  const bi = $('#mt-base'); const ok = Number.isInteger(mt.base) && mt.base >= 68 && mt.base <= 65535;
+  bi.classList.toggle('err', !ok);
+  if (!ok) { res.innerHTML = ''; stack.innerHTML = ''; note.innerHTML = msg('err', 'MTU は 68〜65535 の整数で入力してください'); $('#mt-cfg').textContent = ''; return; }
+  const r = mtSolve();
+  if (!r || r.inner < 68) { res.innerHTML = ''; stack.innerHTML = ''; note.innerHTML = msg('err', 'オーバーヘッドが大きすぎて内側のパケットが入りません'); return; }
+  const l2 = 14 + 4 * mt.tags, frame = r.outer + l2;
+  const hasIpsec = mt.layers.some(l => l.t === 'ipsec');
+  const frameV = `${frame + 4}（FCS込み） / ${frame}（FCSなし）`;
+  if (mt.mode === 'fwd') {
+    res.innerHTML = kv([
+      { k: '内側の IP MTU', v: String(r.inner), cls: 'big acc', note: '最大IPパケット長' },
+      { k: 'TCP MSS（IPv4）', v: String(r.inner - 40), cls: 'big' },
+      { k: 'TCP MSS（IPv6）', v: String(r.inner - 60) },
+      { k: 'オーバーヘッド', v: `${mt.base - r.inner} バイト`, copy: String(mt.base - r.inner), note: hasIpsec ? 'IPsec のパディング込み' : '' },
+      { k: '物理フレーム長', v: frameV, copy: String(frame + 4) },
+    ]);
+  } else {
+    res.innerHTML = kv([
+      { k: '必要な回線 IP MTU', v: String(r.outer), cls: 'big acc' },
+      { k: '必要なフレーム長', v: frameV, copy: String(frame + 4), note: 'スイッチのジャンボフレーム設定の目安' },
+      { k: 'オーバーヘッド', v: `${r.outer - r.inner} バイト`, copy: String(r.outer - r.inner) },
+      { k: '内側 TCP MSS（IPv4）', v: String(r.inner - 40) },
+    ]);
+  }
+  // パケット構成
+  const seg = (lbl, b, c = '') => `<div class="seg2 ${c}">${esc(lbl)}<b>${b}</b></div>`;
+  let h = seg('Ethernet', 14, 'l2'); for (let i = 0; i < mt.tags; i++) h += seg('VLAN', 4, 'l2');
+  const heads = [...r.w].reverse().map(w => w.h.map(x => [...x]));
+  const lays = [...mt.layers].reverse(); let payLbl = '内側 IP パケット', payB = r.inner;
+  lays.forEach((l, k) => { // トランスポートモードは内側の IP ヘッダが ESP の前に出る
+    if (l.t !== 'ipsec' || l.mode !== 'transport') return;
+    const nx = heads[k + 1];
+    if (nx && nx.length && /IPv[46]/.test(nx[0][0])) heads[k].unshift(nx.shift());
+    else if (!nx) { heads[k].unshift(['内側IPヘッダ', 20]); payLbl = '内側データ'; payB = r.inner - 20; }
+  });
+  for (const hh of heads) for (const [a, b] of hh) h += seg(a, b);
+  h += seg(payLbl, payB, 'pay');
+  for (const w of r.w) for (const [a, b] of w.t) h += seg(a, b, 'tail');
+  h += seg('FCS', 4, 'l2');
+  stack.innerHTML = h;
+  const notes = [];
+  if (!mt.layers.length) notes.push(msg('info', 'カプセル化なしの状態です。プリセットを選ぶか、下の「追加」でトンネルなどを重ねてください。'));
+  if (mt.layers.some(l => l.t === 'pppoe') && mt.base === 1500 && mt.mode === 'fwd') notes.push(msg('info', 'フレッツの PPPoE 接続では、理論値の 1492 ではなく <b>MTU 1454 / MSS 1414</b> を推奨する案内が多く見られます。'));
+  if (hasIpsec && mt.mode === 'fwd') notes.push(msg('info', 'IPsec は暗号方式や機器の実装で数バイト変わることがあります。Cisco では余裕をみて <b>ip mtu 1400 / ip tcp adjust-mss 1360</b> とする設計もよく使われます。'));
+  if (mt.layers.some(l => ['vxlan4', 'vxlan6', 'geneve'].includes(l.t))) notes.push(msg('info', 'VXLAN / Geneve は内側で 1500 を通すため、アンダーレイを 1550 以上（実務では 9000〜9216 のジャンボフレーム）にするのが一般的です。「内側 → 必要な回線MTU」で確認できます。'));
+  note.innerHTML = notes.join('');
+  mtCfg(r); mtPing(r);
+}
+function mtCfg(r) {
+  const fwd = mt.mode === 'fwd', mtu = fwd ? r.inner : r.outer, mss = r.inner - 40, l2 = mtu + 14 + 4 * mt.tags;
+  const C = {
+    cisco: fwd ? `! PPPoE の場合は Dialer1 などに設定\ninterface Tunnel0\n ip mtu ${mtu}\n ip tcp adjust-mss ${mss}`
+      : `interface TenGigabitEthernet1/0/1\n mtu ${mtu}\n! Catalyst ではスイッチ全体の system mtu で設定する機種もあり`,
+    juniper: fwd ? `set interfaces st0 unit 0 family inet mtu ${mtu}\nset security flow tcp-mss ipsec-vpn mss ${mss}`
+      : `# Junos の物理 mtu は L2 ヘッダ（14${mt.tags ? '+VLANタグ' : ''}）込みで指定\nset interfaces xe-0/0/1 mtu ${l2}\nset interfaces xe-0/0/1 unit 0 family inet mtu ${mtu}`,
+    huawei: fwd ? `interface Tunnel0/0/1\n mtu ${mtu}\n tcp adjust-mss ${mss}` : `interface GigabitEthernet0/0/1\n mtu ${mtu}\n# スイッチ系はフレーム長で jumboframe enable を使う機種もあり（機種により異なる）`,
+    yamaha: fwd ? `# PPPoE の場合\nip pp mtu ${mtu}\nip pp tcp mss limit ${mss}\n# IPsec トンネルの場合（tunnel select で選択後）\nip tunnel tcp mss limit ${mss}` : `ip lan1 mtu ${mtu}`,
+    linux: fwd ? `ip link set dev <IF> mtu ${mtu}\niptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ${mss}` : `ip link set dev <IF> mtu ${mtu}`,
+    windows: `netsh interface ipv4 show subinterfaces\nnetsh interface ipv4 set subinterface "<IF名>" mtu=${mtu} store=persistent`,
+  };
+  const pre = $('#mt-cfg'); pre.textContent = C[mt.vend]; pre.dataset.copy = C[mt.vend].split('\n').filter(l => !/^\s*[#!]/.test(l)).map(l => l.replace(/\s+!.*$/, '')).join('\n');
+}
+function mtPing(r) {
+  const pi = $('#mt-pmtu');
+  if (document.activeElement !== pi && !pi.dataset.user) pi.value = mt.mode === 'fwd' ? r.inner : r.outer;
+  const m = parseInt(pi.value, 10), d = $('#mt-dst').value.trim() || '<宛先>';
+  if (!(m >= 68 && m <= 65535)) { $('#mt-ping').innerHTML = ''; return; }
+  const s = m - 28;
+  $('#mt-ping').innerHTML = kv([
+    { k: 'Windows', v: `ping -f -l ${s} ${d}` },
+    { k: 'Linux', v: `ping -M do -s ${s} ${d}` },
+    { k: 'macOS', v: `ping -D -s ${s} ${d}` },
+    { k: 'Cisco IOS', v: `ping ${d} size ${m} df-bit` },
+    { k: 'Junos', v: `ping ${d} size ${s} do-not-fragment` },
+    { k: 'Huawei', v: `ping -f -s ${s} ${d}` },
+  ]);
+}
+function mtPl() {
+  const v = $('#mt-pl').value.trim(), out = $('#mt-plr');
+  if (!v) { out.innerHTML = ''; return; }
+  const s = parseInt(v, 10); if (!(s >= 0 && s <= 65507)) { out.innerHTML = msg('err', '0〜65507 の整数を入力してください'); return; }
+  out.innerHTML = msg('ok', `経路 MTU = <b>${s + 28}</b>（IPv4 の TCP MSS = ${s - 12}）`);
+}
+function initMtu() {
+  $('#mt-presets').innerHTML = MT_PRESETS.map(([n], i) => `<button class="chip" data-p="${i}">${esc(n)}</button>`).join('');
+  $('#mt-presets').addEventListener('click', e => {
+    const b = e.target.closest('.chip'); if (!b) return; const p = MT_PRESETS[+b.dataset.p][1];
+    mt.mode = 'fwd'; mt.base = p.base; mt.layers = JSON.parse(JSON.stringify(p.layers)); $('#mt-base').value = mt.base;
+    delete $('#mt-pmtu').dataset.user; mtLayersRender(); mtRender();
+  });
+  $('#mt-add').innerHTML = Object.entries(MT_DEF).map(([k, d]) => `<option value="${k}">${esc(d.n)}</option>`).join('');
+  $('#mt-addbtn').addEventListener('click', () => {
+    const t = $('#mt-add').value; mt.layers.push(t === 'ipsec' ? ipsecL() : t === 'custom' ? { t, n: 10 } : { t });
+    delete $('#mt-pmtu').dataset.user; mtLayersRender(); mtRender();
+  });
+  const lb = $('#mt-layers');
+  lb.addEventListener('click', e => {
+    const rm = e.target.closest('[data-rm]'), mv = e.target.closest('[data-mv]');
+    if (rm) mt.layers.splice(+rm.dataset.rm, 1);
+    else if (mv) { const i = +mv.dataset.mv, j = i + +mv.dataset.d; if (j < 0 || j >= mt.layers.length) return;[mt.layers[i], mt.layers[j]] = [mt.layers[j], mt.layers[i]]; }
+    else return;
+    mtLayersRender(); mtRender();
+  });
+  const onOpt = e => {
+    const el = e.target; if (!el.dataset.k) return; const l = mt.layers[+el.dataset.i];
+    l[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.dataset.k === 'n' ? (parseInt(el.value, 10) || 0) : el.value;
+    if (e.type === 'change' && el.tagName === 'SELECT') mtLayersRender();
+    mtRender();
+  };
+  lb.addEventListener('change', onOpt); lb.addEventListener('input', e => { if (e.target.dataset.k === 'n') onOpt(e); });
+  $('#mt-mode').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || b.dataset.m === mt.mode) return; mt.mode = b.dataset.m; delete $('#mt-pmtu').dataset.user; mtRender();
+  });
+  $('#mt-base').value = mt.base; $('#mt-tags').value = mt.tags;
+  $('#mt-base').addEventListener('input', e => { mt.base = Number(e.target.value.trim()); delete $('#mt-pmtu').dataset.user; mtRender(); });
+  $('#mt-tags').addEventListener('change', e => { mt.tags = +e.target.value; mtRender(); });
+  const V = [['cisco', 'Cisco'], ['juniper', 'Juniper'], ['huawei', 'Huawei'], ['yamaha', 'ヤマハ'], ['linux', 'Linux'], ['windows', 'Windows']];
+  $('#mt-vend').innerHTML = V.map(([k, n]) => `<button data-v="${k}"${k === mt.vend ? ' class="on"' : ''}>${n}</button>`).join('');
+  $('#mt-vend').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; mt.vend = b.dataset.v; $$('#mt-vend button').forEach(x => x.classList.toggle('on', x === b)); mtRender(); });
+  $('#mt-pmtu').addEventListener('input', e => { e.target.dataset.user = '1'; const r = mtSolve(); if (r) mtPing(r); });
+  $('#mt-dst').addEventListener('input', () => { const r = mtSolve(); if (r) mtPing(r); });
+  $('#mt-pl').addEventListener('input', mtPl);
+  mtLayersRender(); mtRender();
+}
+
+/* ================= コマンド対訳 ================= */
+const CM_KEYS = CMD_VENDORS.map(v => v[0]);
+const cm = { vendors: (store.get('cmv2', CM_KEYS) || []).filter(k => CM_KEYS.includes(k)), cat: null, ts: false };
+if (!cm.vendors.length) cm.vendors = [...CM_KEYS];
+const CMD_IDX = CMDS.map(([cat, act, note, v, ts]) => ({ cat, act, note, v, ts: !!ts, hay: [act, note, ...Object.values(v).filter(Boolean)].join(' ').toLowerCase().replace(/\s+/g, ' ') }));
+function cmFilter() {
+  const q = $('#cm-q').value.trim().toLowerCase(), toks = q.split(/\s+/).filter(Boolean);
+  const base = CMD_IDX.filter(r => (!cm.cat || r.cat === cm.cat) && (!cm.ts || r.ts));
+  // まずフレーズ一致（"show vlan" など）、なければ単語の AND 検索
+  let list = toks.length > 1 ? base.filter(r => r.hay.includes(toks.join(' '))) : [];
+  if (!list.length) list = base.filter(r => toks.every(t => r.hay.includes(t)));
+  return { list, toks };
+}
+function cmCard(r, toks, vs) {
+  return `<div class="cmcard"><div class="ct">${r.ts ? '<span class="tsmark" title="トラブルシュートでよく使う">★</span>' : ''}${esc(r.act)}</div>${r.note ? `<div class="cn">${esc(r.note)}</div>` : ''}
+    <div class="cmgrid">${vs.map(([k, n, os]) => {
+      const c = r.v[k];
+      const cl = c ? c.toLowerCase().replace(/\s+/g, ' ') : '';
+      const hit = c && toks.length && (cl.includes(toks.join(' ')) || toks.every(t => cl.includes(t)));
+      return `<div class="cmcell"><div class="vl">${esc(n)} <span style="font-weight:500">${esc(os)}</span></div>${c ? `<pre class="${hit ? 'hit' : ''}" data-copy="${esc(c)}">${esc(c)}</pre>` : '<pre class="na">—</pre>'}</div>`;
+    }).join('')}</div></div>`;
+}
+function cmRender() {
+  const { list, toks } = cmFilter();
+  const vs = CMD_VENDORS.filter(([k]) => cm.vendors.includes(k));
+  $('#cm-count').textContent = list.length ? `${list.length} 件${cm.ts ? '（トラブルシュート）' : ''}` : '該当なし';
+  // 分類ごとに見出しを付けて表示
+  const groups = Object.keys(CMD_CATS).map(c => [c, list.filter(r => r.cat === c)]).filter(([, l]) => l.length);
+  $('#cm-list').innerHTML = groups.map(([c, l]) =>
+    `<div class="cmsec" id="cms-${c}"><h3 class="cmh">${esc(CMD_CATS[c])}<span>${l.length}</span></h3>${l.map(r => cmCard(r, toks, vs)).join('')}</div>`).join('');
+  // 分類チップに件数（検索・絞り込み反映）
+  const { list: all } = (() => { const sv = cm.cat; cm.cat = null; const x = cmFilter(); cm.cat = sv; return x; })();
+  $$('#cm-cats .chip[data-c]').forEach(b => { const n = all.filter(r => r.cat === b.dataset.c).length; b.querySelector('i').textContent = n; b.classList.toggle('zero', !n); });
+}
+function initCmd() {
+  $('#cm-v').innerHTML = CMD_VENDORS.map(([k, n]) => `<button class="chip${cm.vendors.includes(k) ? ' on' : ''}" data-k="${k}">${esc(n)}</button>`).join('');
+  $('#cm-v').addEventListener('click', e => {
+    const b = e.target.closest('.chip'); if (!b) return; const k = b.dataset.k;
+    if (cm.vendors.includes(k)) { if (cm.vendors.length === 1) { toast('1つ以上選んでください'); return; } cm.vendors = cm.vendors.filter(x => x !== k); }
+    else cm.vendors = CM_KEYS.filter(x => x === k || cm.vendors.includes(x));
+    store.set('cmv2', cm.vendors); b.classList.toggle('on'); cmRender();
+  });
+  $('#cm-cats').innerHTML = `<button class="chip ts" id="cm-ts">★ トラブルシュート</button>` +
+    Object.entries(CMD_CATS).map(([k, n]) => `<button class="chip" data-c="${k}">${esc(n)} <i></i></button>`).join('');
+  $('#cm-cats').addEventListener('click', e => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    if (b.id === 'cm-ts') { cm.ts = !cm.ts; b.classList.toggle('on', cm.ts); }
+    else { cm.cat = cm.cat === b.dataset.c ? null : b.dataset.c; $$('#cm-cats .chip[data-c]').forEach(x => x.classList.toggle('on', x.dataset.c === cm.cat)); }
+    cmRender();
+  });
+  $('#cm-q').addEventListener('input', cmRender);
+  cmRender();
+}
+
+
+/* ================= テーマ ================= */
+function applyTheme() {
+  const t = store.get('theme', 'auto');
+  const light = t === 'light' || (t === 'auto' && matchMedia('(prefers-color-scheme: light)').matches);
+  document.documentElement.dataset.theme = light ? 'light' : 'dark';
+  $('meta[name=theme-color]').content = light ? '#f3f5f4' : '#0d1215';
+  $$('#theme-seg button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+}
+function initTheme() {
+  applyTheme();
+  try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyTheme); } catch (e) { }
+  $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; store.set('theme', b.dataset.t); applyTheme(); });
+  $('#theme-btn').addEventListener('click', () => {
+    const cur = document.documentElement.dataset.theme; store.set('theme', cur === 'light' ? 'dark' : 'light'); applyTheme();
+  });
+}
+
+/* ================= ルーティング ================= */
+const VIEWS = ['subnet', 'wildcard', 'ports', 'mac', 'mtu', 'cmd', 'setup', 'more'];
+function route() {
+  let h = location.hash.replace('#', ''); if (!VIEWS.includes(h)) h = 'subnet';
+  VIEWS.forEach(v => $('#v-' + v).classList.toggle('on', v === h));
+  $$('.side a[data-v]').forEach(a => a.classList.toggle('on', a.dataset.v === h));
+  const bh = ['mtu', 'cmd', 'setup', 'more'].includes(h) ? 'more' : h;
+  $$('.bnav a').forEach(a => a.classList.toggle('on', a.dataset.v === bh));
+  window.scrollTo(0, 0);
+}
+
+/* ================= オフライン / インストール ================= */
+const env = {
+  inClaude: !!(window.claude && typeof window.claude.use === 'function'),
+  file: location.protocol === 'file:',
+  standalone: (() => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } })(),
+  ios: /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+  swReady: false, installEvt: null, dl: null,
+};
+function renderOffline() {
+  const pill = $('#st-pill'), st = $('#off-status'), act = $('#off-actions');
+  let cls = 'warn', label = 'オンライン表示', html = '', btns = [];
+  if (env.inClaude) {
+    label = 'プレビュー';
+    html = msg('info', 'claude.ai 上で表示中です。この画面はネット接続が必要です。<br>現場でオフライン利用するには、下のボタンでオフライン版を保存してください。');
+    if (env.dl) {
+      btns.push('<button class="btn pri" data-save="netkit.html|netkit.html">オフライン版HTMLを保存（PC向け）</button>');
+      btns.push('<button class="btn" data-save="netkit-pwa.zip|netkit-pwa.zip">PWAパッケージ（zip）を保存</button>');
+    }
+  } else if (env.standalone && (env.swReady || navigator.serviceWorker?.controller)) {
+    cls = 'ok'; label = 'オフライン対応';
+    html = msg('ok', 'アプリとしてインストール済み。オフラインでも起動できます。');
+  } else if (env.file) {
+    cls = 'ok'; label = 'オフライン動作';
+    html = msg('ok', 'ローカルファイルとして動作中です。ネット接続なしで全機能が使えます。');
+  } else if (env.swReady || navigator.serviceWorker?.controller) {
+    cls = 'ok'; label = 'オフライン対応';
+    html = msg('ok', 'オフライン用キャッシュ済みです。このURLは圏外でも開けます。ホーム画面に追加するとアプリのように起動できます。');
+    if (env.installEvt) btns.push('<button class="btn pri" id="btn-install">アプリとしてインストール</button>');
+    else if (env.ios) html += msg('info', 'iPhone / iPad：Safari の共有ボタン →「ホーム画面に追加」');
+  } else {
+    html = msg('warn', 'オフライン用キャッシュはまだ有効になっていません（HTTPS で配信すると有効になります）。');
+    if (env.installEvt) btns.push('<button class="btn pri" id="btn-install">アプリとしてインストール</button>');
+  }
+  if (!env.inClaude && !env.file) btns.push('<button class="btn" id="btn-savehtml">このアプリをHTMLファイルとして保存</button>');
+  pill.className = 'pill ' + cls; pill.querySelector('span').textContent = label;
+  st.innerHTML = html; act.innerHTML = btns.join('');
+  act.classList.toggle('hide', !btns.length);
+  const ib = $('#btn-install'); if (ib) ib.onclick = async () => { const e = env.installEvt; if (!e) return; e.prompt(); try { await e.userChoice; } catch (x) { } env.installEvt = null; renderOffline(); };
+  const sb = $('#btn-savehtml'); if (sb) sb.onclick = async () => {
+    try {
+      const r = await fetch(location.href.split('#')[0], { cache: 'force-cache' }); const blob = await r.blob();
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([blob], { type: 'text/html' })); a.download = 'netkit.html';
+      document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    } catch (e) { toast('保存できませんでした'); }
+  };
+  $$('[data-save]', act).forEach(b => b.onclick = async () => {
+    const [path, fname] = b.dataset.save.split('|');
+    try {
+      let blob;
+      if (path.endsWith('.zip')) blob = await buildPwaZip();
+      else { const r = await fetch(path); if (!r.ok) throw new Error('fetch'); blob = await r.blob(); }
+      await env.dl.save({ filename: fname, data: blob }); toast('保存しました');
+    } catch (e) { if (e && e.code === 'declined') return; toast('保存できませんでした'); }
+  });
+}
+// PWA一式を zip（無圧縮）にまとめる
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, sz, true); lh.setUint32(22, sz, true); lh.setUint16(26, name.length, true);
+    parts.push(new Uint8Array(lh.buffer), name, f.data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, sz, true); ch.setUint32(24, sz, true); ch.setUint16(28, name.length, true); ch.setUint32(42, off, true);
+    central.push(new Uint8Array(ch.buffer), name);
+    off += 30 + name.length + sz;
+  }
+  const csz = central.reduce((a, b) => a + b.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, csz, true); end.setUint32(16, off, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
+}
+async function buildPwaZip() {
+  const list = [['netkit.html', 'index.html'], ['sw.js'], ['manifest.webmanifest'], ['icon-180.png'], ['icon-192.png'], ['icon-512.png'], ['icon-maskable-512.png'], ['README.txt']];
+  const files = [];
+  for (const [src, dst] of list) {
+    const r = await fetch(src); if (!r.ok) throw new Error(src);
+    files.push({ name: 'netkit/' + (dst || src), data: new Uint8Array(await r.arrayBuffer()) });
+  }
+  return makeZip(files);
+}
+function initOffline() {
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); env.installEvt = e; renderOffline(); });
+  window.addEventListener('appinstalled', () => { env.installEvt = null; toast('インストールしました'); renderOffline(); });
+  const secure = location.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+  if (!env.inClaude && secure && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').then(() => navigator.serviceWorker.ready).then(() => { env.swReady = true; renderOffline(); }).catch(() => { });
+  }
+  if (env.inClaude) {
+    window.claude.use('downloads').then(dl => { env.dl = dl; renderOffline(); }).catch(() => { });
+  }
+  window.addEventListener('online', renderOffline); window.addEventListener('offline', renderOffline);
+  renderOffline();
+}
+
+/* ================= 起動 ================= */
+initTheme();
+initSubnet();
+initWildcard();
+initPorts();
+initMac();
+initMtu();
+initCmd();
+initOffline();
+window.addEventListener('hashchange', route);
+route();
+
+</script>
+</body>
+</html>
