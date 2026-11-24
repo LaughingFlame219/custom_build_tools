@@ -1,0 +1,73 @@
+set network interface ethernet ethernet1/1 layer3 ip 10.0.0.1/24
+set network interface ethernet ethernet1/2 layer3 ip 172.16.0.1/24
+set network interface ethernet ethernet1/3 layer3 ip 203.0.113.2/24
+set network interface ethernet ethernet1/4 layer3 units ethernet1/4.100 tag 100
+set network interface ethernet ethernet1/4 layer3 units ethernet1/4.100 ip 192.168.100.1/24
+set network virtual-router default interface [ ethernet1/1 ethernet1/2 ethernet1/3 ethernet1/4.100 ]
+set network virtual-router default routing-table ip static-route def destination 0.0.0.0/0
+set network virtual-router default routing-table ip static-route def nexthop ip-address 203.0.113.1
+set zone trust network layer3 ethernet1/1
+set zone dmz network layer3 ethernet1/2
+set zone untrust network layer3 ethernet1/3
+set zone guest network layer3 ethernet1/4.100
+set address web-vip ip-netmask 203.0.113.50/32
+set address web-real ip-netmask 172.16.0.10/32
+set address srv1 ip-netmask 10.0.0.10/32
+set address srv1-pub ip-netmask 203.0.113.60/32
+set address lan ip-netmask 10.0.0.0/24
+set address guest-net ip-netmask 192.168.100.0/24
+set address guest-pool ip-range 203.0.113.100-203.0.113.110
+set rulebase security rules out-web from trust
+set rulebase security rules out-web to untrust
+set rulebase security rules out-web source lan
+set rulebase security rules out-web destination any
+set rulebase security rules out-web application [ web-browsing ssl ]
+set rulebase security rules out-web service application-default
+set rulebase security rules out-web action allow
+set rulebase security rules in-web from untrust
+set rulebase security rules in-web to dmz
+set rulebase security rules in-web source any
+set rulebase security rules in-web destination web-vip
+set rulebase security rules in-web application ssl
+set rulebase security rules in-web service service-https
+set rulebase security rules in-web action allow
+set rulebase security rules in-ssh from untrust
+set rulebase security rules in-ssh to trust
+set rulebase security rules in-ssh source any
+set rulebase security rules in-ssh destination srv1-pub
+set rulebase security rules in-ssh application ssh
+set rulebase security rules in-ssh service application-default
+set rulebase security rules in-ssh action allow
+set rulebase security rules guest-out from guest
+set rulebase security rules guest-out to untrust
+set rulebase security rules guest-out source guest-net
+set rulebase security rules guest-out destination any
+set rulebase security rules guest-out application web-browsing
+set rulebase security rules guest-out service application-default
+set rulebase security rules guest-out action allow
+set rulebase nat rules srv1-static from trust
+set rulebase nat rules srv1-static to untrust
+set rulebase nat rules srv1-static source srv1
+set rulebase nat rules srv1-static destination any
+set rulebase nat rules srv1-static service any
+set rulebase nat rules srv1-static source-translation static-ip translated-address srv1-pub
+set rulebase nat rules srv1-static source-translation static-ip bi-directional yes
+set rulebase nat rules web-dnat from untrust
+set rulebase nat rules web-dnat to untrust
+set rulebase nat rules web-dnat source any
+set rulebase nat rules web-dnat destination web-vip
+set rulebase nat rules web-dnat service service-https
+set rulebase nat rules web-dnat destination-translation translated-address web-real
+set rulebase nat rules web-dnat destination-translation translated-port 8443
+set rulebase nat rules guest-pool from guest
+set rulebase nat rules guest-pool to untrust
+set rulebase nat rules guest-pool source guest-net
+set rulebase nat rules guest-pool destination any
+set rulebase nat rules guest-pool service any
+set rulebase nat rules guest-pool source-translation dynamic-ip-and-port translated-address guest-pool
+set rulebase nat rules lan-out from trust
+set rulebase nat rules lan-out to untrust
+set rulebase nat rules lan-out source lan
+set rulebase nat rules lan-out destination any
+set rulebase nat rules lan-out service any
+set rulebase nat rules lan-out source-translation dynamic-ip-and-port interface-address interface ethernet1/3

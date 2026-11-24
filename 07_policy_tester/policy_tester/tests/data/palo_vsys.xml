@@ -1,0 +1,9 @@
+<config><devices><entry name="localhost.localdomain"><network><interface><ethernet>
+<entry name="ethernet1/1"><layer3><ip><entry name="10.1.0.1/24"/></ip></layer3></entry><entry name="ethernet1/2"><layer3><ip><entry name="10.2.0.1/24"/></ip></layer3></entry>
+<entry name="ethernet1/3"><layer3><ip><entry name="10.3.0.1/24"/></ip></layer3></entry><entry name="ethernet1/4"><layer3><ip><entry name="10.4.0.1/24"/></ip></layer3></entry>
+</ethernet></interface></network><vsys>
+<entry name="vsys1"><zone><entry name="in1"><network><layer3><member>ethernet1/1</member></layer3></network></entry><entry name="out1"><network><layer3><member>ethernet1/2</member></layer3></network></entry></zone>
+<address><entry name="h1"><ip-netmask>10.1.0.10/32</ip-netmask></entry></address><rulebase><security><rules><entry name="allow-web"><from><member>in1</member></from><to><member>out1</member></to><source><member>h1</member></source><destination><member>any</member></destination><application><member>web-browsing</member></application><service><member>application-default</member></service><action>allow</action></entry></rules></security></rulebase></entry>
+<entry name="vsys2"><zone><entry name="in2"><network><layer3><member>ethernet1/3</member></layer3></network></entry><entry name="out2"><network><layer3><member>ethernet1/4</member></layer3></network></entry></zone>
+<address><entry name="h2"><ip-netmask>10.3.0.10/32</ip-netmask></entry></address><rulebase><security><rules><entry name="allow-web"><from><member>in2</member></from><to><member>out2</member></to><source><member>h2</member></source><destination><member>any</member></destination><application><member>web-browsing</member></application><service><member>application-default</member></service><action>allow</action></entry></rules></security></rulebase></entry>
+</vsys></entry></devices></config>

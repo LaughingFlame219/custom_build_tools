@@ -1,0 +1,30 @@
+<config version="10.1.0"><devices><entry name="localhost.localdomain"><network><interface><ethernet>
+<entry name="ethernet1/1"><layer3><ip><entry name="10.0.0.1/24"/></ip></layer3></entry>
+<entry name="ethernet1/2"><layer3><ip><entry name="172.16.0.1/24"/></ip></layer3></entry>
+<entry name="ethernet1/3"><layer3><ip><entry name="203.0.113.2/24"/></ip></layer3></entry>
+<entry name="ethernet1/4"><layer3><units><entry name="ethernet1/4.100"><tag>100</tag><ip><entry name="192.168.100.1/24"/></ip></entry></units></layer3></entry>
+</ethernet></interface><virtual-router><entry name="default"><interface><member>ethernet1/1</member><member>ethernet1/2</member><member>ethernet1/3</member><member>ethernet1/4.100</member></interface><routing-table><ip><static-route><entry name="def"><destination>0.0.0.0/0</destination><nexthop><ip-address>203.0.113.1</ip-address></nexthop></entry></static-route></ip></routing-table></entry></virtual-router></network>
+<vsys><entry name="vsys1"><zone>
+<entry name="trust"><network><layer3><member>ethernet1/1</member></layer3></network></entry>
+<entry name="dmz"><network><layer3><member>ethernet1/2</member></layer3></network></entry>
+<entry name="untrust"><network><layer3><member>ethernet1/3</member></layer3></network></entry>
+<entry name="guest"><network><layer3><member>ethernet1/4.100</member></layer3></network></entry>
+</zone><address>
+<entry name="web-vip"><ip-netmask>203.0.113.50/32</ip-netmask></entry>
+<entry name="web-real"><ip-netmask>172.16.0.10/32</ip-netmask></entry>
+<entry name="srv1"><ip-netmask>10.0.0.10/32</ip-netmask></entry>
+<entry name="srv1-pub"><ip-netmask>203.0.113.60/32</ip-netmask></entry>
+<entry name="lan"><ip-netmask>10.0.0.0/24</ip-netmask></entry>
+<entry name="guest-net"><ip-netmask>192.168.100.0/24</ip-netmask></entry>
+<entry name="guest-pool"><ip-range>203.0.113.100-203.0.113.110</ip-range></entry>
+</address><rulebase><security><rules>
+<entry name="out-web"><from><member>trust</member></from><to><member>untrust</member></to><source><member>lan</member></source><destination><member>any</member></destination><application><member>web-browsing</member><member>ssl</member></application><service><member>application-default</member></service><action>allow</action></entry>
+<entry name="in-web"><from><member>untrust</member></from><to><member>dmz</member></to><source><member>any</member></source><destination><member>web-vip</member></destination><application><member>ssl</member></application><service><member>service-https</member></service><action>allow</action></entry>
+<entry name="in-ssh"><from><member>untrust</member></from><to><member>trust</member></to><source><member>any</member></source><destination><member>srv1-pub</member></destination><application><member>ssh</member></application><service><member>application-default</member></service><action>allow</action></entry>
+<entry name="guest-out"><from><member>guest</member></from><to><member>untrust</member></to><source><member>guest-net</member></source><destination><member>any</member></destination><application><member>web-browsing</member></application><service><member>application-default</member></service><action>allow</action></entry>
+</rules></security><nat><rules>
+<entry name="srv1-static"><from><member>trust</member></from><to><member>untrust</member></to><source><member>srv1</member></source><destination><member>any</member></destination><service>any</service><source-translation><static-ip><translated-address>srv1-pub</translated-address><bi-directional>yes</bi-directional></static-ip></source-translation></entry>
+<entry name="web-dnat"><from><member>untrust</member></from><to><member>untrust</member></to><source><member>any</member></source><destination><member>web-vip</member></destination><service>service-https</service><destination-translation><translated-address>web-real</translated-address><translated-port>8443</translated-port></destination-translation></entry>
+<entry name="guest-pool"><from><member>guest</member></from><to><member>untrust</member></to><source><member>guest-net</member></source><destination><member>any</member></destination><service>any</service><source-translation><dynamic-ip-and-port><translated-address><member>guest-pool</member></translated-address></dynamic-ip-and-port></source-translation></entry>
+<entry name="lan-out"><from><member>trust</member></from><to><member>untrust</member></to><source><member>lan</member></source><destination><member>any</member></destination><service>any</service><source-translation><dynamic-ip-and-port><interface-address><interface>ethernet1/3</interface></interface-address></dynamic-ip-and-port></source-translation></entry>
+</rules></nat></rulebase></entry></vsys></entry></devices></config>

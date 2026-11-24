@@ -1,0 +1,33 @@
+set address NET-A ip-netmask 192.168.1.0/24
+set address SRV-1 ip-netmask 10.0.0.1
+set address RNG ip-range 10.0.1.10-10.0.1.20
+set address-group G1 static [ NET-A SRV-1 ]
+set service tcp-8443 protocol tcp port 8443,9000-9002
+set rulebase security rules Deny-SRV1 from trust
+set rulebase security rules Deny-SRV1 to untrust
+set rulebase security rules Deny-SRV1 source SRV-1
+set rulebase security rules Deny-SRV1 destination RNG
+set rulebase security rules Deny-SRV1 application any
+set rulebase security rules Deny-SRV1 service any
+set rulebase security rules Deny-SRV1 action drop
+set rulebase security rules Allow-Web from trust
+set rulebase security rules Allow-Web to untrust
+set rulebase security rules Allow-Web source G1
+set rulebase security rules Allow-Web destination RNG
+set rulebase security rules Allow-Web application [ web-browsing ssl ]
+set rulebase security rules Allow-Web service application-default
+set rulebase security rules Allow-Web action allow
+set rulebase security rules Allow-8443 from trust
+set rulebase security rules Allow-8443 to dmz
+set rulebase security rules Allow-8443 source NET-A
+set rulebase security rules Allow-8443 destination SRV-1
+set rulebase security rules Allow-8443 application ssl
+set rulebase security rules Allow-8443 service tcp-8443
+set rulebase security rules Allow-8443 action allow
+set rulebase security rules Reset-telnet from any
+set rulebase security rules Reset-telnet to any
+set rulebase security rules Reset-telnet source any
+set rulebase security rules Reset-telnet destination RNG
+set rulebase security rules Reset-telnet application telnet
+set rulebase security rules Reset-telnet service application-default
+set rulebase security rules Reset-telnet action reset-client
